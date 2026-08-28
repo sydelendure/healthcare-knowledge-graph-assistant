@@ -1,132 +1,134 @@
 # Healthcare Knowledge Graph Assistant
 
-A natural-language healthcare assistant built using **Neo4j Knowledge Graphs, FastAPI, Flask, and Groq LLM**.
+A natural-language healthcare assistant built with **Neo4j, FastAPI, Flask, and Groq LLM**. It allows users to ask questions about doctors, hospitals, specialties, and locations without writing database queries.
 
-The application allows users to ask healthcare-related questions in natural language, such as:
+### Example Queries
 
-* "Show cardiologists in South District"
-* "Tell me about Dr Arohi"
-* "Which doctors work at City Hospital?"
-* "Show hospitals in South District"
-
-The system converts these questions into structured intents, queries a Neo4j healthcare knowledge graph, and presents the results through a web interface.
+```text
+Show cardiologists in South District
+Tell me about Dr Arohi
+Which doctors work at City Hospital?
+Show hospitals in South District
+```
 
 ---
 
-## Architecture
+## How It Works
 
-The application follows a layered architecture:
+The application uses a **hybrid intent-understanding pipeline**. Common queries are handled using fast regex rules, while more flexible questions are processed by the Groq LLM. If the LLM is unavailable or fails, a fuzzy fallback provides graceful degradation.
 
 ```mermaid
-flowchart TD
-    U["User"] --> UI["Flask Web UI"]
-    UI --> API["FastAPI /ask"]
-    API --> NLP["Intent Understanding"]
+flowchart LR
+    U["User"] --> F["Flask UI"]
+    F --> A["FastAPI /ask"]
+    A --> P["Intent Understanding"]
 
-    NLP --> R["Regex Parser"]
+    P --> R["Regex Parser"]
     R -->|Match| I["Structured Intent"]
     R -->|No Match| L["Groq LLM"]
 
     L -->|Success| I
-    L -->|Failure| F["Fuzzy Fallback"]
-    F --> I
+    L -->|Failure| FB["Fuzzy Fallback"]
+    FB --> I
 
     I --> D["Intent Dispatcher"]
-    D --> Q["Graph Query Functions"]
-    Q --> C["Cypher"]
+    D --> C["Cypher Query"]
     C --> N[("Neo4j Knowledge Graph")]
 
-    N --> Q
-    Q --> API
-    API --> UI
-    UI --> U
+    N --> D
+    D --> A
+    A --> F
+    F --> U
 ```
 
 ---
 
-## End-to-End Flow
+## System Architecture
 
 ```mermaid
-sequenceDiagram
-    participant U as User
-    participant F as Flask
-    participant A as FastAPI
-    participant P as Parser
-    participant G as Graph Queries
-    participant N as Neo4j
+flowchart TD
 
-    U->>F: Enter natural-language question
-    F->>A: POST /ask
-    A->>P: understand_question()
-
-    P->>P: Regex parsing
-
-    alt Regex match
-        P-->>A: Structured intent
-    else No regex match
-        P->>P: Groq LLM parsing
-        alt LLM succeeds
-            P-->>A: Structured intent
-        else LLM fails
-            P->>P: Fuzzy fallback
-            P-->>A: Fallback intent
-        end
+    subgraph Frontend
+        UI["Flask + HTML/CSS/JS"]
     end
 
-    A->>G: dispatch_intent()
-    G->>N: Execute Cypher query
-    N-->>G: Query results
-    G-->>A: Formatted results
-    A-->>F: JSON response
-    F-->>U: Display results
+    subgraph Backend
+        API["FastAPI"]
+        NLP["Intent Processing"]
+        DIS["Intent Dispatcher"]
+    end
+
+    subgraph Database
+        GQ["Graph Query Functions"]
+        NEO4J[("Neo4j")]
+    end
+
+    UI -->|POST /ask| API
+    API --> NLP
+    NLP --> DIS
+    DIS --> GQ
+    GQ --> NEO4J
+    NEO4J --> GQ
+    GQ --> API
+    API -->|JSON| UI
 ```
 
 ---
 
-## Hybrid Intent Processing
+## Intent Processing
 
-The system uses three levels of processing:
-
-| Stage          | Purpose                                       |
-| -------------- | --------------------------------------------- |
-| Regex Parser   | Fast handling of common query patterns        |
-| Groq LLM       | Semantic understanding of free-form questions |
-| Fuzzy Fallback | Recovery when LLM processing fails            |
-
-Example:
+The parser follows three stages:
 
 ```text
-User Question
-      ↓
-Regex Parser
-      ↓
-Structured Intent
-      ↓
-Intent Dispatcher
-      ↓
-Cypher Query
-      ↓
-Neo4j
-      ↓
-Results
+Natural Language Question
+          |
+          v
+    Regex Fast Path
+       /       \
+    Match    No Match
+      |          |
+      v          v
+   Intent      Groq LLM
+                 |
+            +----+----+
+            |         |
+         Success    Failure
+            |         |
+            v         v
+          Intent   Fuzzy Fallback
+                      |
+                      v
+                    Intent
 ```
 
-The LLM is used for **intent extraction**, while database operations are handled by predefined application logic.
+The LLM produces a structured intent such as:
+
+```json
+{
+  "intent": "doctors_by_specialty",
+  "specialty": "Cardiology",
+  "district": "South District"
+}
+```
+
+The LLM is responsible for **understanding the question**, while the application controls which database query is executed.
 
 ---
 
 ## Knowledge Graph
 
-The healthcare data is represented using connected entities:
+Healthcare information is represented as connected entities in Neo4j.
 
 ```mermaid
 graph LR
     D["Doctor"] -->|HAS_SPECIALTY| S["Specialty"]
     D -->|WORKS_AT| H["Hospital"]
     H -->|LOCATED_IN| L["Location"]
+    H -->|HAS_DEPARTMENT| DP["Department"]
+    H -->|OFFERS_SERVICE| SV["Service"]
 ```
 
-This allows the application to answer relationship-based questions across doctors, specialties, hospitals, and locations.
+This structure allows the system to answer relationship-based questions involving doctors, specialties, hospitals, departments, and locations.
 
 ---
 
@@ -143,11 +145,12 @@ KG-usecase/
 │   ├── llm.py
 │   └── main.py
 ├── data/
-│   └── *.csv
+│   └── healthcare CSV datasets
 ├── frontend/
 │   ├── app.py
 │   ├── static/
 │   └── templates/
+├── graph/
 ├── README.md
 ├── requirements.txt
 └── .gitignore
@@ -155,85 +158,73 @@ KG-usecase/
 
 ### Main Components
 
-**`backend/llm.py`**
-Handles regex parsing, LLM intent extraction, and fuzzy fallback.
-
-**`backend/main.py`**
-FastAPI service and `/ask` endpoint.
-
-**`app/graph_queries.py`**
-Maps intents to controlled Cypher queries.
-
-**`app/database.py`**
-Handles Neo4j database connectivity.
-
-**`app/load_data.py`**
-Loads the healthcare dataset into Neo4j.
-
-**`frontend/app.py`**
-Flask application that serves the web interface and communicates with FastAPI.
-
-**`app/test_suite.py`**
-Automated tests for graph queries, intent extraction, APIs, security, edge cases, and concurrency.
+| File                   | Purpose                                     |
+| ---------------------- | ------------------------------------------- |
+| `backend/llm.py`       | Regex parsing, LLM processing, and fallback |
+| `backend/main.py`      | FastAPI REST API                            |
+| `app/graph_queries.py` | Intent dispatch and Cypher queries          |
+| `app/database.py`      | Neo4j database connection                   |
+| `app/load_data.py`     | Loads healthcare data into Neo4j            |
+| `frontend/app.py`      | Flask frontend/proxy                        |
+| `app/test_suite.py`    | Automated testing                           |
 
 ---
 
-## Technology Stack
+## Reliability
 
-* **Python**
-* **Neo4j**
-* **Cypher**
-* **FastAPI**
-* **Flask**
-* **Groq**
-* **OpenAI GPT-OSS 120B**
-* **Pydantic**
-* **HTML / CSS / JavaScript**
+The system is designed so that the LLM is **not a single point of failure**.
+
+* Common queries avoid LLM usage through regex parsing.
+* Unrecognized queries are sent to the Groq LLM.
+* Rate limits and API errors trigger the fallback parser.
+* Unknown queries return a controlled `unknown` intent instead of crashing the application.
+* Database access is performed through predefined graph-query functions.
 
 ---
 
-## Setup
+## API Flow
 
-Clone the repository:
-
-```bash
-git clone https://github.com/sydelendure/healthcare-knowledge-graph-assistant.git
-cd healthcare-knowledge-graph-assistant
-```
-
-Create and activate a virtual environment:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-```
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-Configure the required environment variables in `.env`:
+The main endpoint is:
 
 ```text
-GROQ_API_KEY=your_groq_api_key
-NEO4J_URI=your_neo4j_uri
-NEO4J_USERNAME=your_neo4j_username
-NEO4J_PASSWORD=your_neo4j_password
+POST /ask
 ```
 
-Load the healthcare data into Neo4j and start the backend/frontend services according to the project configuration.
+Request:
+
+```json
+{
+  "question": "Show cardiologists in South District"
+}
+```
+
+The backend processes the request as:
+
+```text
+Question
+   ↓
+Intent
+   ↓
+Graph Query
+   ↓
+Neo4j
+   ↓
+Results
+   ↓
+JSON Response
+   ↓
+Flask UI
+```
 
 ---
 
 ## Testing
 
-The project includes an automated test suite covering:
+The project includes automated tests covering:
 
-* Neo4j integrity
-* Graph queries
-* LLM/regex intent extraction
+* Neo4j graph integrity
+* Graph query correctness
+* Intent extraction
 * FastAPI endpoints
 * Flask proxy
 * Security and edge cases
@@ -248,18 +239,46 @@ Latest test run:
 
 ---
 
-## Design Goal
+## Technology Stack
 
-The project combines the flexibility of **natural-language interaction** with the structured relationships of a **knowledge graph**.
+* **Python**
+* **Neo4j / Cypher**
+* **FastAPI**
+* **Flask**
+* **Groq**
+* **OpenAI GPT-OSS-120B**
+* **Pydantic**
+* **HTML / CSS / JavaScript**
 
-```mermaid
-flowchart LR
-    A["Natural Language"] --> B["Intent Understanding"]
-    B --> C["Structured Intent"]
-    C --> D["Controlled Cypher"]
-    D --> E[("Neo4j")]
-    E --> F["Structured Results"]
-    F --> G["Web UI"]
+---
+
+## Setup
+
+```bash
+git clone https://github.com/sydelendure/healthcare-knowledge-graph-assistant.git
+cd healthcare-knowledge-graph-assistant
+
+python -m venv .venv
+source .venv/bin/activate
+
+pip install -r requirements.txt
 ```
 
-The architecture is designed to minimize unnecessary LLM usage, provide graceful fallback behavior, and keep database operations controlled and predictable.
+Configure Neo4j and Groq credentials in `.env`:
+
+```text
+GROQ_API_KEY=your_groq_api_key
+NEO4J_URI=your_neo4j_uri
+NEO4J_USERNAME=your_neo4j_username
+NEO4J_PASSWORD=your_neo4j_password
+```
+
+---
+
+## Core Design
+
+The project combines:
+
+**Natural Language → Intent Understanding → Controlled Graph Query → Neo4j → Structured Results**
+
+This provides a natural user interface while keeping database operations structured, predictable, and resilient to LLM failures.
