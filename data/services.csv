@@ -1,0 +1,21 @@
+service_id,name
+SV001,ECG
+SV002,Echocardiography
+SV003,MRI
+SV004,CT Scan
+SV005,X-Ray
+SV006,Ultrasound
+SV007,Blood Test
+SV008,Dialysis
+SV009,Physiotherapy
+SV010,Emergency Care
+SV011,Endoscopy
+SV012,Eye Examination
+SV013,Dental Care
+SV014,Minor Surgery
+SV015,Ambulance Service
+SV016,Maternity Care
+SV017,Child Health Services
+SV018,Cancer Screening
+SV019,Health Checkup
+SV020,Pharmacy

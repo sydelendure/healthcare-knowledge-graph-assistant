@@ -1,0 +1,7 @@
+neo4j
+python-dotenv
+fastapi
+uvicorn
+groq
+flask
+requests

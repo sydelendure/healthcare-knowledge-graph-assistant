@@ -1,0 +1,35 @@
+department_id,name,hospital_id
+DEP001,Cardiology,H001
+DEP002,Neurology,H001
+DEP003,Orthopedics,H002
+DEP004,Dermatology,H002
+DEP005,Pediatrics,H003
+DEP006,Gynecology,H003
+DEP007,Ophthalmology,H004
+DEP008,Otolaryngology,H004
+DEP009,Cardiology,H005
+DEP010,Neurology,H005
+DEP011,General Medicine,H006
+DEP012,General Surgery,H006
+DEP013,Oncology,H007
+DEP014,Urology,H008
+DEP015,Pulmonology,H008
+DEP016,Gastroenterology,H009
+DEP017,Nephrology,H010
+DEP018,Cardiology,H012
+DEP019,Neurology,H012
+DEP020,Orthopedics,H013
+DEP021,Dermatology,H013
+DEP022,Pediatrics,H014
+DEP023,Gynecology,H014
+DEP024,Ophthalmology,H015
+DEP025,Otolaryngology,H015
+DEP026,General Medicine,H016
+DEP027,General Surgery,H016
+DEP028,Oncology,H020
+DEP029,Urology,H020
+DEP030,Pulmonology,H017
+DEP031,Gastroenterology,H018
+DEP032,Nephrology,H019
+DEP033,Cardiology,H020
+DEP034,Neurology,H020
