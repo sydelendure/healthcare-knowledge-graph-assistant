@@ -1,10 +1,13 @@
 from flask import Flask, render_template, request, jsonify
 import requests
+import os
 
 app = Flask(__name__)
 
-FASTAPI_URL = "http://127.0.0.1:8001"
-
+FASTAPI_URL = os.getenv(
+    "FASTAPI_URL",
+    "http://127.0.0.1:8001"
+)
 
 @app.route("/")
 def home():
