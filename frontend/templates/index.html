@@ -623,7 +623,7 @@
                 addAssistantMessage(data, question);
             } catch (err) {
                 removeLoadingMessage();
-                addErrorMessage("Could not connect to the healthcare backend service on port 8001.");
+                addErrorMessage("Could not connect to the healthcare backend service. Please try again in a moment.");
             } finally {
                 welcomeSendBtn.disabled = false;
                 dockSendBtn.disabled = false;
