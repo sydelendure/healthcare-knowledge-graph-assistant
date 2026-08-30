@@ -21,6 +21,21 @@ app = FastAPI(
 )
 
 
+@app.on_event("startup")
+def startup_checks():
+    print("Running startup configuration checks...")
+    try:
+        from app.database import Neo4jDatabase
+        db = Neo4jDatabase()
+        if db.verify_connection():
+            print("Startup check: Neo4j connection verified successfully.")
+        else:
+            print("Startup check warning: Neo4j connectivity check failed.")
+        db.close()
+    except Exception as e:
+        print(f"Startup check warning: {e}")
+
+
 class QuestionRequest(BaseModel):
     question: str
 

@@ -20,6 +20,7 @@ def _clean_env(val: str | None) -> str | None:
 NEO4J_URI = _clean_env(os.getenv("NEO4J_URI") or os.getenv("NEO4J_URL"))
 NEO4J_USERNAME = _clean_env(os.getenv("NEO4J_USERNAME") or os.getenv("NEO4J_USER"))
 NEO4J_PASSWORD = _clean_env(os.getenv("NEO4J_PASSWORD"))
+NEO4J_DATABASE = _clean_env(os.getenv("NEO4J_DATABASE"))
 
 
 class Neo4jDatabase:
