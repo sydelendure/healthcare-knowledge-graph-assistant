@@ -9,10 +9,19 @@ from groq import Groq, RateLimitError, APIError
 
 load_dotenv()
 
-api_key = os.getenv("GROQ_API_KEY")
+def _clean_env(val: str | None) -> str | None:
+    if val is None:
+        return None
+    val = val.strip()
+    if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+        val = val[1:-1].strip()
+    return val
+
+
+api_key = _clean_env(os.getenv("GROQ_API_KEY"))
 
 if not api_key:
-    raise ValueError("GROQ_API_KEY is not set in .env")
+    raise ValueError("GROQ_API_KEY is not set in environment or .env")
 
 client = Groq(api_key=api_key)
 
