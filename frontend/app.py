@@ -77,8 +77,12 @@ def ask():
                 err_msg = "The backend service was unable to process your question."
             return jsonify({"error": err_msg}), response.status_code
         except Exception:
+            if response.status_code in [502, 503, 504]:
+                return jsonify({
+                    "error": "The backend service is currently waking up. Please try your question again in a few seconds."
+                }), response.status_code
             return jsonify({
-                "error": "The backend service returned an unexpected response."
+                "error": "The backend service returned an unexpected response. Please try again."
             }), response.status_code
 
     except (requests.exceptions.InvalidURL, requests.exceptions.MissingSchema):
