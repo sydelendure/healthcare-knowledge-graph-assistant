@@ -764,13 +764,12 @@
                         }
                     });
 
-                    const hopDist = data.hop_distance || (data.traversal_path.length - 1);
-                    const totalKm = data.total_distance_km ? ` &bull; ${data.total_distance_km} km total` : '';
+                    const distLabel = data.total_distance_km ? `${data.total_distance_km} km total &bull; ` : '';
                     hopBadgeHtml = `
                         <div class="graph-hop-container">
                             <div class="graph-hop-header">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="m10 15 5-3-5-3v6Z"/></svg>
-                                <span>Shortest Path Multi-Hop &bull; ${hopDist} ${hopDist === 1 ? 'Hop' : 'Hops'} Away${totalKm}</span>
+                                <span>Shortest Path Route &bull; ${distLabel}Referral Network</span>
                             </div>
                             <div class="graph-hop-path">
                                 ${pathStepsHtml}
@@ -778,7 +777,7 @@
                         </div>
                     `;
 
-                    const kmText = data.total_distance_km ? ` (${data.total_distance_km} km / ${hopDist} ${hopDist === 1 ? 'hop' : 'hops'} away)` : ` (${hopDist} ${hopDist === 1 ? 'hop' : 'hops'} away)`;
+                    const kmText = data.total_distance_km ? ` (${data.total_distance_km} km away)` : '';
                     leadText = `No practitioners in ${specName} were found directly at <strong>${escapeHtml(origin)}</strong>. Executed Shortest-Path graph traversal across the hospital referral network to locate <strong>${count}</strong> matching ${count === 1 ? 'doctor' : 'doctors'} at <strong>${escapeHtml(target)}</strong>${kmText}:`;
                 } else if (data.hop_type === "specialty_mismatch") {
                     const docName = data.doctor_name || "The doctor";
@@ -789,7 +788,7 @@
                         <div class="graph-hop-container">
                             <div class="graph-hop-header">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
-                                <span>Knowledge Graph Multi-Hop Traversal &bull; Specialty Mismatch</span>
+                                <span>Knowledge Graph Traversal &bull; Specialty Mismatch</span>
                             </div>
                             <div class="graph-hop-path">
                                 <span class="hop-node">${escapeHtml(docName)} (${escapeHtml(actualSpec)})</span>
@@ -807,7 +806,7 @@
                         <div class="graph-hop-container">
                             <div class="graph-hop-header">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
-                                <span>Knowledge Graph Multi-Hop Traversal</span>
+                                <span>Knowledge Graph Traversal</span>
                             </div>
                             <div class="graph-hop-path">
                                 <span class="hop-node">${escapeHtml(origin)}</span>
