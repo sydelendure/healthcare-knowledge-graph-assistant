@@ -192,19 +192,7 @@ def fast_rule_parser(q: str):
             'doctor_name': doc_name
         }
 
-    if 'hospital' in q_low or 'medical center' in q_low or 'facilities' in q_low:
-        if ('doctor' in q_low or 'practitioner' in q_low or 'physician' in q_low or 'working' in q_low) and ' at ' in q_low:
-            h_name = q_low.split(' at ')[-1].strip().title()
-            return {'intent': 'doctors_by_hospital', 'hospital_name': h_name}
-        if 'north' in q_low:
-            return {'intent': 'hospitals_by_district', 'district': 'North District'}
-        if 'south' in q_low:
-            return {'intent': 'hospitals_by_district', 'district': 'South District'}
-        if 'downtown' in q_low:
-            return {'intent': 'hospitals_by_district', 'district': 'Downtown'}
-        if 'all' in q_low or 'list' in q_low or 'show' in q_low:
-            return {'intent': 'all_hospitals'}
-
+    # 2. Specialty with location / district / hospital
     if spec:
         dist = None
         if 'north' in q_low:
@@ -220,6 +208,15 @@ def fast_rule_parser(q: str):
                 loc = l.title().replace('Oak Ridge', 'Oakridge')
                 break
 
+        if not loc and not dist:
+            for prep in [' at ', ' in ', ' near ']:
+                if prep in q_low:
+                    raw_loc = q_low.split(prep)[-1].strip()
+                    raw_loc = re.sub(r'\b(please|tell me|show me|find)\b', '', raw_loc).strip()
+                    if raw_loc:
+                        loc = raw_loc.title()
+                        break
+
         if dist:
             return {
                 'intent': 'doctors_by_specialty_and_district',
@@ -232,11 +229,24 @@ def fast_rule_parser(q: str):
                 'specialty': spec,
                 'location': loc
             }
-        if 'doctor' in q_low or 'physician' in q_low or len(q_low.split()) <= 3:
-            return {
-                'intent': 'doctors_by_specialty',
-                'specialty': spec
-            }
+        return {
+            'intent': 'doctors_by_specialty',
+            'specialty': spec
+        }
+
+    # 3. Hospitals & non-specialty queries
+    if 'hospital' in q_low or 'medical center' in q_low or 'facilities' in q_low:
+        if ('doctor' in q_low or 'practitioner' in q_low or 'physician' in q_low or 'working' in q_low) and ' at ' in q_low:
+            h_name = q_low.split(' at ')[-1].strip().title()
+            return {'intent': 'doctors_by_hospital', 'hospital_name': h_name}
+        if 'north' in q_low:
+            return {'intent': 'hospitals_by_district', 'district': 'North District'}
+        if 'south' in q_low:
+            return {'intent': 'hospitals_by_district', 'district': 'South District'}
+        if 'downtown' in q_low:
+            return {'intent': 'hospitals_by_district', 'district': 'Downtown'}
+        if 'all' in q_low or 'list' in q_low or 'show' in q_low:
+            return {'intent': 'all_hospitals'}
 
     if any(w in q_low for w in ['capital of', 'weather in', 'recipe for', 'president of', 'who wrote', 'calculate']):
         return {'intent': 'unknown'}
@@ -283,6 +293,15 @@ def fuzzy_graph_fallback(question: str):
         if l in q_low:
             loc = l.title().replace("Oak Ridge", "Oakridge")
             break
+
+    if not loc and not dist:
+        for prep in [' at ', ' in ', ' near ']:
+            if prep in q_low:
+                raw_loc = q_low.split(prep)[-1].strip()
+                raw_loc = re.sub(r'\b(please|tell me|show me|find)\b', '', raw_loc).strip()
+                if raw_loc:
+                    loc = raw_loc.title()
+                    break
 
     if spec and dist:
         return {"intent": "doctors_by_specialty_and_district", "specialty": spec, "district": dist}
