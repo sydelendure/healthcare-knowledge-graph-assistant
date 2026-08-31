@@ -752,7 +752,31 @@
                 const target = data.hop_target || "Connected District";
                 const specName = data.requested_specialty || first.specialization || "Specialty";
 
-                if (data.hop_type === "specialty_mismatch") {
+                if (data.hop_type === "shortest_path" && data.traversal_path && data.traversal_path.length > 1) {
+                    let pathStepsHtml = '';
+                    data.traversal_path.forEach((hosp, idx) => {
+                        const isLast = idx === data.traversal_path.length - 1;
+                        pathStepsHtml += `<span class="hop-node ${isLast ? 'highlight' : ''}">${escapeHtml(hosp)}</span>`;
+                        if (!isLast) {
+                            pathStepsHtml += `<span class="hop-edge">&rarr; <em>:CONNECTED_TO</em> &rarr;</span>`;
+                        }
+                    });
+
+                    const hopDist = data.hop_distance || (data.traversal_path.length - 1);
+                    hopBadgeHtml = `
+                        <div class="graph-hop-container">
+                            <div class="graph-hop-header">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+                                <span>Shortest Path Multi-Hop &bull; ${hopDist} ${hopDist === 1 ? 'Hop' : 'Hops'} Away in Referral Network</span>
+                            </div>
+                            <div class="graph-hop-path">
+                                ${pathStepsHtml}
+                            </div>
+                        </div>
+                    `;
+
+                    leadText = `No practitioners in ${specName} were found directly at <strong>${escapeHtml(origin)}</strong>. Executed Shortest-Path graph traversal across the hospital referral network to locate <strong>${count}</strong> matching ${count === 1 ? 'doctor' : 'doctors'} at <strong>${escapeHtml(target)}</strong> (${hopDist} ${hopDist === 1 ? 'hop' : 'hops'} away):`;
+                } else if (data.hop_type === "specialty_mismatch") {
                     const docName = data.doctor_name || "The doctor";
                     const actualSpec = data.actual_specialty || "another field";
                     const reqSpec = data.requested_specialty || "the requested field";

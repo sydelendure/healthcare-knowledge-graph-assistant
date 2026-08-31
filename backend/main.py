@@ -9,6 +9,7 @@ from app.graph_queries import (
     get_all_hospitals,
     get_doctor_by_name,
     check_doctor_specialty_with_graph_hopping,
+    find_closest_hospitals,
 )
 
 from backend.llm import understand_question, fuzzy_graph_fallback
@@ -120,6 +121,27 @@ def hospitals(
     }
 
 
+@app.get("/hospitals/closest")
+def closest_hospitals(
+    hospital_name: str,
+    specialty: str = None
+):
+    hospital_name = hospital_name.strip()
+    specialty = specialty.strip() if specialty else None
+    results = find_closest_hospitals(hospital_name, specialty)
+    if not results:
+        raise HTTPException(
+            status_code=404,
+            detail="No connected hospitals found in referral network."
+        )
+    return {
+        "origin_hospital": hospital_name,
+        "specialty": specialty,
+        "count": len(results),
+        "results": results
+    }
+
+
 @app.post("/ask")
 def ask_question(request: QuestionRequest):
 
@@ -160,7 +182,9 @@ def ask_question(request: QuestionRequest):
                     "graph_hopped": True,
                     "hop_type": hop_res.get("hop_type"),
                     "hop_origin": hop_res.get("hop_origin"),
-                    "hop_target": hop_res.get("hop_target")
+                    "hop_target": hop_res.get("hop_target"),
+                    "hop_distance": hop_res.get("hop_distance"),
+                    "traversal_path": hop_res.get("traversal_path", [])
                 }
         elif specialty:
             results = get_doctors_by_specialty(specialty)

@@ -81,7 +81,46 @@ def find_doctors_with_graph_hopping(specialty, location):
                     "graph_hopped": False
                 }
 
-            # 2. Multi-hop: Resolve location/hospital to its parent District
+            # 2. Shortest Path Traversal via :CONNECTED_TO Hospital Network
+            shortest_path_query = """
+            MATCH (origin:Hospital)
+            WHERE toLower(origin.name) CONTAINS toLower($location)
+               OR toLower($location) CONTAINS toLower(origin.name)
+               OR any(w IN split(toLower($location), " ") WHERE size(w) > 3 AND NOT w IN ["hospital", "center", "medical", "clinic"] AND toLower(origin.name) CONTAINS w)
+            MATCH (target:Hospital)<-[:WORKS_AT]-(d:Doctor)-[:HAS_SPECIALTY]->(s:Speciality)
+            WHERE toLower(s.name) = toLower($specialty) AND target <> origin
+            MATCH p = shortestPath((origin)-[:CONNECTED_TO*1..5]-(target))
+            OPTIONAL MATCH (target)-[:LOCATED_IN]->(l:Location)
+            RETURN
+                d.doctor_id AS doctor_id,
+                d.name AS doctor,
+                s.name AS specialization,
+                target.hospital_id AS hospital_id,
+                target.name AS hospital,
+                l.city AS city,
+                l.district AS district,
+                length(p) AS hop_distance,
+                [node in nodes(p) | node.name] AS traversal_path,
+                origin.name AS origin_name,
+                target.name AS target_name
+            ORDER BY hop_distance ASC, d.name ASC
+            """
+            sp_results = [r.data() for r in session.run(shortest_path_query, specialty=specialty, location=location)]
+            if sp_results:
+                min_hop = sp_results[0]["hop_distance"]
+                closest_results = [r for r in sp_results if r["hop_distance"] == min_hop]
+                first_match = sp_results[0]
+                return {
+                    "results": closest_results,
+                    "graph_hopped": True,
+                    "hop_type": "shortest_path",
+                    "hop_origin": first_match.get("origin_name") or location,
+                    "hop_target": first_match.get("target_name"),
+                    "hop_distance": min_hop,
+                    "traversal_path": first_match.get("traversal_path", [])
+                }
+
+            # 3. Multi-hop: Resolve location/hospital to its parent District
             loc_query = """
             MATCH (l:Location)
             WHERE toLower(l.city) CONTAINS toLower($location)
@@ -129,7 +168,7 @@ def find_doctors_with_graph_hopping(specialty, location):
                         "hop_target": district
                     }
 
-            # 3. Network-wide graph fallback
+            # 4. Network-wide graph fallback
             all_spec_query = """
             MATCH (d:Doctor)-[:WORKS_AT]->(h:Hospital)-[:LOCATED_IN]->(l:Location),
                   (d)-[:HAS_SPECIALTY]->(s:Speciality)
@@ -421,5 +460,61 @@ def check_doctor_specialty_with_graph_hopping(doctor_name, requested_specialty):
                 "hop_target": f"{hospital} & {district}" if (hospital and district) else (district or "Regional Network")
             }
 
+    finally:
+        db.close()
+
+
+def find_closest_hospitals(origin_hospital, specialty=None):
+    """
+    Finds the closest hospital(s) in the referral network using shortestPath algorithm.
+    """
+    db = Neo4jDatabase()
+    try:
+        with db.driver.session() as session:
+            if specialty:
+                query = """
+                MATCH (origin:Hospital)
+                WHERE toLower(origin.name) CONTAINS toLower($origin_hospital)
+                   OR toLower($origin_hospital) CONTAINS toLower(origin.name)
+                   OR any(w IN split(toLower($origin_hospital), " ") WHERE size(w) > 3 AND NOT w IN ["hospital", "center", "medical", "clinic"] AND toLower(origin.name) CONTAINS w)
+                MATCH (target:Hospital)<-[:WORKS_AT]-(d:Doctor)-[:HAS_SPECIALTY]->(s:Speciality)
+                WHERE toLower(s.name) = toLower($specialty) AND target <> origin
+                MATCH p = shortestPath((origin)-[:CONNECTED_TO*1..5]-(target))
+                OPTIONAL MATCH (target)-[:LOCATED_IN]->(l:Location)
+                RETURN
+                    target.hospital_id AS hospital_id,
+                    target.name AS hospital,
+                    target.type AS hospital_type,
+                    l.city AS city,
+                    l.district AS district,
+                    length(p) AS hop_distance,
+                    [node in nodes(p) | node.name] AS traversal_path,
+                    collect(d.name) AS doctors
+                ORDER BY hop_distance ASC
+                """
+                results = [r.data() for r in session.run(query, origin_hospital=origin_hospital, specialty=specialty)]
+            else:
+                query = """
+                MATCH (origin:Hospital)
+                WHERE toLower(origin.name) CONTAINS toLower($origin_hospital)
+                   OR toLower($origin_hospital) CONTAINS toLower(origin.name)
+                   OR any(w IN split(toLower($origin_hospital), " ") WHERE size(w) > 3 AND NOT w IN ["hospital", "center", "medical", "clinic"] AND toLower(origin.name) CONTAINS w)
+                MATCH (target:Hospital)
+                WHERE target <> origin
+                MATCH p = shortestPath((origin)-[:CONNECTED_TO*1..5]-(target))
+                OPTIONAL MATCH (target)-[:LOCATED_IN]->(l:Location)
+                RETURN
+                    target.hospital_id AS hospital_id,
+                    target.name AS hospital,
+                    target.type AS hospital_type,
+                    l.city AS city,
+                    l.district AS district,
+                    length(p) AS hop_distance,
+                    [node in nodes(p) | node.name] AS traversal_path
+                ORDER BY hop_distance ASC
+                """
+                results = [r.data() for r in session.run(query, origin_hospital=origin_hospital)]
+
+            return results
     finally:
         db.close()
