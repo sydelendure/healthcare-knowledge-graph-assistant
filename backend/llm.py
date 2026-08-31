@@ -174,22 +174,30 @@ def fast_rule_parser(q: str):
         non_names = {'located', 'in', 'at', 'working', 'who', 'specialist', 'specializing', 'for', 'near'}
         words = candidate.split()
         if words and words[0] not in non_names:
-            doc_name = m.group(0).title()
+            # Strip trailing short connector words like 'a', 'an', 'is', 'in'
+            clean_cand = re.sub(r'(?i)\b(a|an|is|in|at|for|the|of)\b$', '', candidate).strip()
+            doc_name = f"Dr. {clean_cand.title()}" if clean_cand else m.group(0).title()
 
     spec = extract_specialty(q_low)
 
     if doc_name and spec and not any(w in q_low for w in ['district', 'hospital', 'medical center']):
-        clean_doc = re.sub(r'(?i)\b(neurology|cardiology|dermatology|orthopedics|pediatrics|general medicine)\b', '', doc_name).strip()
+        clean_doc = re.sub(r'(?i)\b(neurology|cardiology|dermatology|orthopedics|pediatrics|general medicine|doctor|dr\.?)\b', '', doc_name).strip()
+        clean_doc = re.sub(r'(?i)\b(a|an|is|in|at|for|the|of)\b$', '', clean_doc).strip()
+        clean_doc = re.sub(r'^[.\s]+', '', clean_doc).strip()
+        final_name = f"Dr. {clean_doc.title()}" if (clean_doc and not clean_doc.lower().startswith("dr")) else (clean_doc or doc_name)
         return {
             'intent': 'doctor_and_specialty_check',
-            'doctor_name': clean_doc or doc_name,
+            'doctor_name': final_name,
             'specialty': spec
         }
 
     if doc_name and ('who is' in q_low or 'tell me about' in q_low or 'details' in q_low or 'info' in q_low or len(q_low.split()) <= 4):
+        clean_doc = re.sub(r'(?i)\b(who is|tell me about|details|info)\b', '', doc_name).strip()
+        clean_doc = re.sub(r'^[.\s]+', '', clean_doc).strip()
+        final_name = f"Dr. {clean_doc.title()}" if (clean_doc and not clean_doc.lower().startswith("dr")) else (clean_doc or doc_name)
         return {
             'intent': 'doctor_by_name',
-            'doctor_name': doc_name
+            'doctor_name': final_name
         }
 
     # 2. Specialty with location / district / hospital

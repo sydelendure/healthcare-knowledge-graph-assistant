@@ -366,11 +366,10 @@ def get_doctor_by_name(doctor_name):
 
 
 def check_doctor_specialty_with_graph_hopping(doctor_name, requested_specialty):
+    import re
     clean_name = doctor_name.strip()
-    for prefix in ["dr.", "doctor ", "dr ", "dr"]:
-        if clean_name.lower().startswith(prefix):
-            clean_name = clean_name[len(prefix):].strip()
-            break
+    clean_name = re.sub(r'(?i)\b(dr\.?|doctor)\b', '', clean_name).strip()
+    clean_name = re.sub(r'(?i)\b(a|an|the|is|in|at|for|to|of|as|with)\b$', '', clean_name).strip()
 
     db = Neo4jDatabase()
     try:
@@ -382,6 +381,7 @@ def check_doctor_specialty_with_graph_hopping(doctor_name, requested_specialty):
                OR toLower(d.name) CONTAINS toLower($clean_name)
                OR toLower($name) CONTAINS toLower(d.name)
                OR toLower($clean_name) CONTAINS toLower(d.name)
+               OR any(w IN split(toLower($clean_name), " ") WHERE size(w) > 2 AND toLower(d.name) CONTAINS w)
             OPTIONAL MATCH (d)-[:HAS_SPECIALTY]->(s:Speciality)
             OPTIONAL MATCH (d)-[:WORKS_AT]->(h:Hospital)-[:LOCATED_IN]->(l:Location)
             RETURN
@@ -397,7 +397,14 @@ def check_doctor_specialty_with_graph_hopping(doctor_name, requested_specialty):
             doc_record = session.run(doc_query, name=doctor_name, clean_name=clean_name).single()
 
             if not doc_record:
-                return find_doctors_with_graph_hopping(requested_specialty, "")
+                all_res = find_doctors_with_graph_hopping(requested_specialty, "")
+                return {
+                    "results": all_res.get("results", []),
+                    "is_specialty_match": False,
+                    "doctor_name": doctor_name,
+                    "requested_specialty": requested_specialty,
+                    "graph_hopped": False
+                }
 
             doc_data = dict(doc_record)
             actual_specialty = doc_data.get("actual_specialty") or "General Medicine"
