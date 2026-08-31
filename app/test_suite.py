@@ -9,6 +9,9 @@ from app.graph_queries import (
     get_doctors_by_hospital,
     get_hospitals_by_district,
     get_all_hospitals,
+    find_doctors_with_graph_hopping,
+    find_closest_hospitals,
+    check_doctor_specialty_with_graph_hopping,
 )
 from backend.llm import understand_question
 
@@ -268,10 +271,44 @@ def test_security_and_edge_cases():
 
 
 # =========================================================================
-# TEST SUITE 7: CONCURRENCY & LOAD PERFORMANCE
+# TEST SUITE 7: MULTI-HOP GRAPH TRAVERSAL & SHORTEST PATH ALGORITHMS
+# =========================================================================
+def test_multihop_algorithms():
+    section("7. Multi-Hop Graph Traversal & Shortest Path Algorithms")
+
+    # 7.1 Shortest path: General physician at Metro Central Hospital
+    hop1 = find_doctors_with_graph_hopping("General Medicine", "Metro Central Medical Center")
+    record_result("Shortest Path triggers when specialty absent at hospital", hop1.get("graph_hopped") is True, f"Got: {hop1}")
+    record_result("Shortest Path hop_type is 'shortest_path'", hop1.get("hop_type") == "shortest_path", f"Got: {hop1.get('hop_type')}")
+    record_result("Shortest Path computes valid total_distance_km (> 0)", bool(hop1.get("total_distance_km") and hop1["total_distance_km"] > 0), f"Distance: {hop1.get('total_distance_km')}")
+    record_result("Shortest Path identifies Northfield Community Hospital target", "Northfield" in str(hop1.get("hop_target", "")), f"Target: {hop1.get('hop_target')}")
+    record_result("Shortest Path returns Dr. Amaya Desai", any("Amaya Desai" in doc.get("doctor", "") for doc in hop1.get("results", [])), f"Results: {hop1.get('results')}")
+
+    # 7.2 Shortest path: Pediatrician at Metro Central Medical Center
+    hop2 = find_doctors_with_graph_hopping("Pediatrics", "Metro Central Medical Center")
+    record_result("Shortest path referral for Pediatrics from Metro Central", hop2.get("graph_hopped") is True and len(hop2.get("results", [])) > 0, f"Got: {hop2.get('hop_target')}")
+
+    # 7.3 Direct closest hospitals algorithm API
+    closest = find_closest_hospitals("Metro Central Medical Center", "General Medicine")
+    record_result("find_closest_hospitals returns connected facilities with distance", len(closest) > 0 and "total_distance_km" in closest[0], f"Closest: {closest[:1]}")
+
+    # 7.4 Specialty Mismatch multi-hop traversal
+    mismatch = check_doctor_specialty_with_graph_hopping("Dr. Aarohi", "Neurology")
+    record_result("Specialty mismatch detected for Dr. Aarohi (Cardiology != Neurology)", mismatch.get("is_specialty_match") is False, f"Match: {mismatch.get('is_specialty_match')}")
+    record_result("Specialty mismatch triggers multi-hop to certified Neurologists", mismatch.get("graph_hopped") is True and len(mismatch.get("results", [])) > 0, f"Results: {len(mismatch.get('results', []))}")
+
+    # 7.5 API End-to-end /ask multi-hop check
+    r_api = requests.post(f"{FASTAPI_URL}/ask", json={"question": "general physician at metro hospital"})
+    data_api = r_api.json()
+    record_result("POST /ask returns shortest_path referral metadata", data_api.get("graph_hopped") is True and data_api.get("hop_type") == "shortest_path", f"API resp: {data_api}")
+    record_result("POST /ask includes total_distance_km and traversal_path", bool(data_api.get("total_distance_km") and len(data_api.get("traversal_path", [])) > 1), f"Path: {data_api.get('traversal_path')}")
+
+
+# =========================================================================
+# TEST SUITE 8: CONCURRENCY & LOAD PERFORMANCE
 # =========================================================================
 def test_concurrency_and_performance():
-    section("7. Concurrency & Load Performance")
+    section("8. Concurrency & Load Performance")
 
     queries = [
         "Find cardiologists in South District",
@@ -309,7 +346,7 @@ def test_concurrency_and_performance():
 # =========================================================================
 # MAIN EXECUTION
 # =========================================================================
-if __name__ == "__main__":
+if __name__ == "__main__": 
     print("\n" + "#" * 60)
     print("  COMMENCING RIGOROUS AUTOMATED TEST SUITE")
     print("#" * 60)
@@ -321,6 +358,7 @@ if __name__ == "__main__":
     test_fastapi_endpoints()
     test_flask_frontend()
     test_security_and_edge_cases()
+    test_multihop_algorithms()
     test_concurrency_and_performance()
     t_total = time.time() - t0
 
