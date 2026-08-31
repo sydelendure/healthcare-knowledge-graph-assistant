@@ -859,34 +859,43 @@
             } else if (intent === "doctor_and_specialty_check") {
                 leadText = `Yes, <strong>${escapeHtml(first.doctor)}</strong> is certified in <strong>${escapeHtml(first.specialization)}</strong> at ${escapeHtml(first.hospital || 'this center')}:`;
             } else if (intent === "doctor_by_name") {
-                leadText = `Here is the profile and hospital affiliation for <strong>${escapeHtml(first.doctor)}</strong>:`;
+                leadText = count === 1 
+                    ? `Here is the profile and hospital affiliation for <strong>${escapeHtml(first.doctor)}</strong>:`
+                    : `I found ${count} practitioners matching your search:`;
             } else if (intent === "doctors_by_specialty_and_location" || intent === "doctors_by_specialty_and_district") {
                 const locLabel = first.city || first.district || "";
-                leadText = `I found ${count} ${count === 1 ? 'doctor' : 'doctors'}${first.specialization ? ' in ' + first.specialization : ''}${locLabel ? ' in ' + locLabel : ''}.`;
+                leadText = `I found ${count} ${count === 1 ? 'doctor' : 'doctors'}${first.specialization ? ' in ' + first.specialization : ''}${locLabel ? ' in ' + locLabel : ''}:`;
             } else if (intent === "doctors_by_specialty") {
-                leadText = `I found ${count} ${count === 1 ? 'doctor' : 'doctors'}${first.specialization ? ' in ' + first.specialization : ''} across all districts.`;
+                leadText = `I found ${count} ${count === 1 ? 'doctor' : 'doctors'}${first.specialization ? ' in ' + first.specialization : ''} across all districts:`;
             } else if (intent === "doctors_by_hospital") {
-                leadText = `I found ${count} ${count === 1 ? 'doctor' : 'doctors'} at ${first.hospital || 'this medical center'}.`;
+                leadText = `I found ${count} ${count === 1 ? 'doctor' : 'doctors'} at ${first.hospital || 'this medical center'}:`;
             } else if (intent === "hospitals_by_district") {
-                leadText = `I found ${count} ${count === 1 ? 'hospital' : 'hospitals'}${first.district ? ' in ' + first.district : ''}.`;
+                leadText = `I found ${count} ${count === 1 ? 'hospital' : 'hospitals'}${first.district ? ' in ' + first.district : ''}:`;
             } else if (intent === "all_hospitals") {
-                leadText = `I found ${count} healthcare facilities across all districts.`;
+                leadText = `I found ${count} healthcare facilities across all districts:`;
             } else if (isDoctor) {
-                leadText = `I found ${count} ${count === 1 ? 'doctor' : 'doctors'}${first.specialization ? ' in ' + first.specialization : ''}.`;
+                const allSameSpec = data.results.every(r => r.specialization === first.specialization);
+                if (allSameSpec && first.specialization) {
+                    leadText = `I found ${count} ${count === 1 ? 'doctor' : 'doctors'} in ${first.specialization}:`;
+                } else {
+                    leadText = `I found ${count} matching ${count === 1 ? 'doctor' : 'doctors'}:`;
+                }
             } else {
-                leadText = `I found ${count} ${count === 1 ? 'hospital' : 'hospitals'}.`;
+                leadText = `I found ${count} ${count === 1 ? 'hospital' : 'hospitals'}:`;
             }
 
             let cardsHtml = '';
-            data.results.forEach(item => {
-                if (item.doctor) {
-                    cardsHtml += createDoctorCard(item);
-                } else if (item.hospital) {
-                    cardsHtml += createHospitalCard(item);
-                } else {
-                    cardsHtml += `<div class="result-card"><pre>${escapeHtml(JSON.stringify(item, null, 2))}</pre></div>`;
-                }
-            });
+            if (!data.ambiguous) {
+                data.results.forEach(item => {
+                    if (item.doctor) {
+                        cardsHtml += createDoctorCard(item);
+                    } else if (item.hospital) {
+                        cardsHtml += createHospitalCard(item);
+                    } else {
+                        cardsHtml += `<div class="result-card"><pre>${escapeHtml(JSON.stringify(item, null, 2))}</pre></div>`;
+                    }
+                });
+            }
 
             row.innerHTML = `
                 <div class="assistant-content">
