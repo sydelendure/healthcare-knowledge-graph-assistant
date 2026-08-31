@@ -365,7 +365,7 @@ def get_doctor_by_name(doctor_name):
         db.close()
 
 
-def check_doctor_specialty_with_graph_hopping(doctor_name, requested_specialty):
+def check_doctor_specialty_with_graph_hopping(doctor_name, requested_specialty, hospital_name=None):
     import re
     clean_name = doctor_name.strip()
     clean_name = re.sub(r'(?i)\b(dr\.?|doctor)\b', '', clean_name).strip()
@@ -374,29 +374,48 @@ def check_doctor_specialty_with_graph_hopping(doctor_name, requested_specialty):
     db = Neo4jDatabase()
     try:
         with db.driver.session() as session:
-            # 1. Fetch doctor node
-            doc_query = """
-            MATCH (d:Doctor)
-            WHERE toLower(d.name) CONTAINS toLower($name)
-               OR toLower(d.name) CONTAINS toLower($clean_name)
-               OR toLower($name) CONTAINS toLower(d.name)
-               OR toLower($clean_name) CONTAINS toLower(d.name)
-               OR any(w IN split(toLower($clean_name), " ") WHERE size(w) > 2 AND toLower(d.name) CONTAINS w)
-            OPTIONAL MATCH (d)-[:HAS_SPECIALTY]->(s:Speciality)
-            OPTIONAL MATCH (d)-[:WORKS_AT]->(h:Hospital)-[:LOCATED_IN]->(l:Location)
-            RETURN
-                d.doctor_id AS doctor_id,
-                d.name AS doctor,
-                s.name AS actual_specialty,
-                h.hospital_id AS hospital_id,
-                h.name AS hospital,
-                l.city AS city,
-                l.district AS district
-            LIMIT 1
-            """
-            doc_record = session.run(doc_query, name=doctor_name, clean_name=clean_name).single()
+            # 1. Fetch matching doctor nodes
+            if hospital_name:
+                doc_query = """
+                MATCH (d:Doctor)-[:WORKS_AT]->(h:Hospital)-[:LOCATED_IN]->(l:Location),
+                      (d)-[:HAS_SPECIALTY]->(s:Speciality)
+                WHERE (toLower(d.name) CONTAINS toLower($name)
+                   OR toLower(d.name) CONTAINS toLower($clean_name)
+                   OR toLower($name) CONTAINS toLower(d.name)
+                   OR toLower($clean_name) CONTAINS toLower(d.name)
+                   OR any(w IN split(toLower($clean_name), " ") WHERE size(w) > 2 AND toLower(d.name) CONTAINS w))
+                  AND (toLower(h.name) CONTAINS toLower($hospital_name) OR toLower($hospital_name) CONTAINS toLower(h.name))
+                RETURN
+                    d.doctor_id AS doctor_id,
+                    d.name AS doctor,
+                    s.name AS actual_specialty,
+                    h.hospital_id AS hospital_id,
+                    h.name AS hospital,
+                    l.city AS city,
+                    l.district AS district
+                """
+                candidates = [r.data() for r in session.run(doc_query, name=doctor_name, clean_name=clean_name, hospital_name=hospital_name)]
+            else:
+                doc_query = """
+                MATCH (d:Doctor)-[:WORKS_AT]->(h:Hospital)-[:LOCATED_IN]->(l:Location),
+                      (d)-[:HAS_SPECIALTY]->(s:Speciality)
+                WHERE toLower(d.name) CONTAINS toLower($name)
+                   OR toLower(d.name) CONTAINS toLower($clean_name)
+                   OR toLower($name) CONTAINS toLower(d.name)
+                   OR toLower($clean_name) CONTAINS toLower(d.name)
+                   OR any(w IN split(toLower($clean_name), " ") WHERE size(w) > 2 AND toLower(d.name) CONTAINS w)
+                RETURN
+                    d.doctor_id AS doctor_id,
+                    d.name AS doctor,
+                    s.name AS actual_specialty,
+                    h.hospital_id AS hospital_id,
+                    h.name AS hospital,
+                    l.city AS city,
+                    l.district AS district
+                """
+                candidates = [r.data() for r in session.run(doc_query, name=doctor_name, clean_name=clean_name)]
 
-            if not doc_record:
+            if not candidates:
                 all_res = find_doctors_with_graph_hopping(requested_specialty, "")
                 return {
                     "results": all_res.get("results", []),
@@ -406,7 +425,31 @@ def check_doctor_specialty_with_graph_hopping(doctor_name, requested_specialty):
                     "graph_hopped": False
                 }
 
-            doc_data = dict(doc_record)
+            # If multiple doctors sharing the same name are found at different hospitals
+            if len(candidates) > 1 and not hospital_name:
+                disambiguation_list = []
+                for cand in candidates:
+                    is_match = (cand.get("actual_specialty", "").lower() == requested_specialty.lower())
+                    disambiguation_list.append({
+                        "doctor_id": cand.get("doctor_id"),
+                        "doctor": cand.get("doctor"),
+                        "actual_specialty": cand.get("actual_specialty"),
+                        "hospital": cand.get("hospital"),
+                        "district": cand.get("district"),
+                        "is_specialty_match": is_match,
+                        "suggested_query": f"Is {cand.get('doctor')} at {cand.get('hospital')} in {requested_specialty}?"
+                    })
+
+                return {
+                    "ambiguous": True,
+                    "doctor_name": doctor_name,
+                    "requested_specialty": requested_specialty,
+                    "candidates": disambiguation_list,
+                    "results": candidates,
+                    "graph_hopped": False
+                }
+
+            doc_data = dict(candidates[0])
             actual_specialty = doc_data.get("actual_specialty") or "General Medicine"
             doc_name = doc_data.get("doctor") or doctor_name
             hospital = doc_data.get("hospital") or ""

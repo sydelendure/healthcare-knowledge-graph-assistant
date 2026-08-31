@@ -233,15 +233,34 @@ def ask_question(request: QuestionRequest):
 
         doctor_name = intent_data.get("doctor_name")
         specialty = intent_data.get("specialty")
+        hospital_name = intent_data.get("hospital_name") or intent_data.get("hospital") or intent_data.get("location")
         if doctor_name and specialty:
-            check_res = check_doctor_specialty_with_graph_hopping(doctor_name, specialty)
+            check_res = check_doctor_specialty_with_graph_hopping(doctor_name, specialty, hospital_name=hospital_name)
             results = check_res.get("results", [])
+            if check_res.get("ambiguous"):
+                return {
+                    "question": question,
+                    "intent": "doctor_disambiguation",
+                    "ambiguous": True,
+                    "doctor_name": check_res.get("doctor_name"),
+                    "requested_specialty": check_res.get("requested_specialty"),
+                    "candidates": check_res.get("candidates", []),
+                    "count": len(results),
+                    "results": results
+                }
             if check_res.get("graph_hopped"):
                 graph_hop_info = {
                     "graph_hopped": True,
                     "hop_type": check_res.get("hop_type"),
                     "hop_origin": check_res.get("hop_origin"),
                     "hop_target": check_res.get("hop_target"),
+                    "is_specialty_match": check_res.get("is_specialty_match"),
+                    "doctor_name": check_res.get("doctor_name"),
+                    "actual_specialty": check_res.get("actual_specialty"),
+                    "requested_specialty": check_res.get("requested_specialty")
+                }
+            elif check_res.get("is_specialty_match") is not None:
+                graph_hop_info = {
                     "is_specialty_match": check_res.get("is_specialty_match"),
                     "doctor_name": check_res.get("doctor_name"),
                     "actual_specialty": check_res.get("actual_specialty"),
