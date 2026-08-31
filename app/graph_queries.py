@@ -100,10 +100,12 @@ def find_doctors_with_graph_hopping(specialty, location):
                 l.city AS city,
                 l.district AS district,
                 length(p) AS hop_distance,
+                round(reduce(total = 0.0, rel in relationships(p) | total + coalesce(rel.distance_km, 3.0)) * 10) / 10.0 AS total_distance_km,
+                [rel in relationships(p) | coalesce(rel.distance_km, 3.0)] AS step_distances,
                 [node in nodes(p) | node.name] AS traversal_path,
                 origin.name AS origin_name,
                 target.name AS target_name
-            ORDER BY hop_distance ASC, d.name ASC
+            ORDER BY hop_distance ASC, total_distance_km ASC, d.name ASC
             """
             sp_results = [r.data() for r in session.run(shortest_path_query, specialty=specialty, location=location)]
             if sp_results:
@@ -117,6 +119,8 @@ def find_doctors_with_graph_hopping(specialty, location):
                     "hop_origin": first_match.get("origin_name") or location,
                     "hop_target": first_match.get("target_name"),
                     "hop_distance": min_hop,
+                    "total_distance_km": first_match.get("total_distance_km"),
+                    "step_distances": first_match.get("step_distances", []),
                     "traversal_path": first_match.get("traversal_path", [])
                 }
 
@@ -488,9 +492,11 @@ def find_closest_hospitals(origin_hospital, specialty=None):
                     l.city AS city,
                     l.district AS district,
                     length(p) AS hop_distance,
+                    round(reduce(total = 0.0, rel in relationships(p) | total + coalesce(rel.distance_km, 3.0)) * 10) / 10.0 AS total_distance_km,
+                    [rel in relationships(p) | coalesce(rel.distance_km, 3.0)] AS step_distances,
                     [node in nodes(p) | node.name] AS traversal_path,
                     collect(d.name) AS doctors
-                ORDER BY hop_distance ASC
+                ORDER BY hop_distance ASC, total_distance_km ASC
                 """
                 results = [r.data() for r in session.run(query, origin_hospital=origin_hospital, specialty=specialty)]
             else:
@@ -510,8 +516,10 @@ def find_closest_hospitals(origin_hospital, specialty=None):
                     l.city AS city,
                     l.district AS district,
                     length(p) AS hop_distance,
+                    round(reduce(total = 0.0, rel in relationships(p) | total + coalesce(rel.distance_km, 3.0)) * 10) / 10.0 AS total_distance_km,
+                    [rel in relationships(p) | coalesce(rel.distance_km, 3.0)] AS step_distances,
                     [node in nodes(p) | node.name] AS traversal_path
-                ORDER BY hop_distance ASC
+                ORDER BY hop_distance ASC, total_distance_km ASC
                 """
                 results = [r.data() for r in session.run(query, origin_hospital=origin_hospital)]
 

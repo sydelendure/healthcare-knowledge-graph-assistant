@@ -71,15 +71,17 @@ def reload_database():
                 CREATE (d)-[:WORKS_AT]->(h)
             """, doctor_id=doc["doctor_id"], name=doc["name"], specialty_id=doc["specialty_id"], hospital_id=doc["hospital_id"])
 
-        print("Creating CONNECTED_TO relationships between hospitals...")
+        print("Creating CONNECTED_TO relationships between hospitals with distance_km...")
         connections = load_csv("hospital_connections.csv")
         for conn in connections:
             session.run("""
                 MATCH (h1:Hospital {hospital_id: $src})
                 MATCH (h2:Hospital {hospital_id: $tgt})
-                MERGE (h1)-[:CONNECTED_TO]->(h2)
-                MERGE (h2)-[:CONNECTED_TO]->(h1)
-            """, src=conn["source_hospital_id"], tgt=conn["target_hospital_id"])
+                MERGE (h1)-[r1:CONNECTED_TO]->(h2)
+                SET r1.distance_km = toFloat($dist)
+                MERGE (h2)-[r2:CONNECTED_TO]->(h1)
+                SET r2.distance_km = toFloat($dist)
+            """, src=conn["source_hospital_id"], tgt=conn["target_hospital_id"], dist=conn.get("distance_km", 3.0))
 
         # Verification count
         res = session.run("MATCH (n) RETURN labels(n) as label, count(*) as count").data()

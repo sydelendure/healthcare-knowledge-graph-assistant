@@ -184,6 +184,8 @@ def ask_question(request: QuestionRequest):
                     "hop_origin": hop_res.get("hop_origin"),
                     "hop_target": hop_res.get("hop_target"),
                     "hop_distance": hop_res.get("hop_distance"),
+                    "total_distance_km": hop_res.get("total_distance_km"),
+                    "step_distances": hop_res.get("step_distances", []),
                     "traversal_path": hop_res.get("traversal_path", [])
                 }
         elif specialty:
