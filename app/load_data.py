@@ -83,6 +83,43 @@ def reload_database():
                 SET r2.distance_km = toFloat($dist)
             """, src=conn["source_hospital_id"], tgt=conn["target_hospital_id"], dist=conn.get("distance_km", 3.0))
 
+        print("Creating Department nodes & relationships...")
+        departments = load_csv("departments.csv")
+        for dep in departments:
+            session.run("""
+                MATCH (h:Hospital {hospital_id: $hospital_id})
+                CREATE (d:Department {
+                    department_id: $department_id,
+                    name: $name
+                })
+                CREATE (h)-[:HAS_DEPARTMENT]->(d)
+                WITH d
+                OPTIONAL MATCH (s:Speciality)
+                WHERE toLower(s.name) = toLower($name)
+                FOREACH (_ IN CASE WHEN s IS NOT NULL THEN [1] ELSE [] END |
+                    CREATE (d)-[:OFFERS_SPECIALTY]->(s)
+                )
+            """, department_id=dep["department_id"], name=dep["name"], hospital_id=dep["hospital_id"])
+
+        print("Creating Service nodes & relationships...")
+        services = load_csv("services.csv")
+        for svc in services:
+            session.run("""
+                CREATE (s:Service {
+                    service_id: $service_id,
+                    name: $name
+                })
+            """, service_id=svc["service_id"], name=svc["name"])
+
+        # Link core hospital services based on hospital type / specialty
+        session.run("""
+            MATCH (h:Hospital), (s:Service)
+            WHERE (s.name IN ['Emergency Care', 'Pharmacy', 'Ambulance Service', 'Blood Test', 'X-Ray'])
+               OR (h.type = 'Private' AND s.name IN ['Health Checkup', 'Ultrasound', 'ECG'])
+               OR (h.beds >= 300 AND s.name IN ['CT Scan', 'MRI', 'ICU', 'Dialysis'])
+            MERGE (h)-[:OFFERS_SERVICE]->(s)
+        """)
+
         # Verification count
         res = session.run("MATCH (n) RETURN labels(n) as label, count(*) as count").data()
         print("Updated Graph summary:", res)

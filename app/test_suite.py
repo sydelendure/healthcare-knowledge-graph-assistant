@@ -56,6 +56,8 @@ def test_database_integrity():
         record_result("Speciality node count == 15", node_counts.get("Speciality") == 15, f"Got: {node_counts.get('Speciality')}")
         record_result("Hospital node count == 20", node_counts.get("Hospital") == 20, f"Got: {node_counts.get('Hospital')}")
         record_result("Doctor node count == 50", node_counts.get("Doctor") == 50, f"Got: {node_counts.get('Doctor')}")
+        record_result("Department node count == 34", node_counts.get("Department") == 34, f"Got: {node_counts.get('Department')}")
+        record_result("Service node count == 20", node_counts.get("Service") == 20, f"Got: {node_counts.get('Service')}")
 
         # 1.2 Relationship integrity
         orphan_docs = session.run("MATCH (d:Doctor) WHERE NOT (d)-[:WORKS_AT]->(:Hospital) OR NOT (d)-[:HAS_SPECIALTY]->(:Speciality) RETURN count(d) as count").single()["count"]
