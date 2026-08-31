@@ -749,13 +749,19 @@
 
             if (data.ambiguous && data.candidates) {
                 const docQueryName = data.doctor_name || "this doctor";
-                const reqSpec = data.requested_specialty || "the requested field";
+                const reqSpec = data.requested_specialty || "";
+                const hospNote = data.hospital_name ? ` at ${escapeHtml(data.hospital_name)}` : '';
 
                 let candListHtml = '';
                 data.candidates.forEach(c => {
-                    const matchBadge = c.is_specialty_match 
-                        ? `<span style="background: rgba(34, 197, 94, 0.15); color: #22c55e; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;">MATCH: ${escapeHtml(c.actual_specialty)}</span>`
-                        : `<span style="background: rgba(239, 68, 68, 0.15); color: #f87171; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;">MISMATCH: Certified in ${escapeHtml(c.actual_specialty)}</span>`;
+                    let matchBadge = '';
+                    if (c.is_specialty_match === true) {
+                        matchBadge = `<span style="background: rgba(34, 197, 94, 0.15); color: #22c55e; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;">✓ MATCH: Certified in ${escapeHtml(c.actual_specialty)}</span>`;
+                    } else if (c.is_specialty_match === false) {
+                        matchBadge = `<span style="background: rgba(239, 68, 68, 0.15); color: #f87171; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;">✕ MISMATCH: Certified in ${escapeHtml(c.actual_specialty)}${reqSpec ? ', not ' + escapeHtml(reqSpec) : ''}</span>`;
+                    } else {
+                        matchBadge = `<span style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;">Specialty: ${escapeHtml(c.actual_specialty)}</span>`;
+                    }
 
                     candListHtml += `
                         <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-light); border-radius: 8px; padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
@@ -769,14 +775,18 @@
                     `;
                 });
 
+                const headerSub = reqSpec 
+                    ? `I found <strong>${data.candidates.length} doctors</strong> matching "<strong>${escapeHtml(docQueryName)}</strong>"${hospNote}. Please select which doctor or hospital you are inquiring about to verify specialty:`
+                    : `I found <strong>${data.candidates.length} doctors</strong> matching "<strong>${escapeHtml(docQueryName)}</strong>"${hospNote}. Please select which doctor you are inquiring about:`;
+
                 hopBadgeHtml = `
                     <div class="graph-hop-container">
                         <div class="graph-hop-header">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-                            <span>Practitioner Disambiguation &bull; Multiple Hospitals Found</span>
+                            <span>Practitioner Disambiguation &bull; Multiple Matches Found</span>
                         </div>
                         <div style="padding: 6px 0 2px 0; font-size: 13px; color: var(--text-secondary);">
-                            I found <strong>${data.candidates.length} doctors</strong> matching "<strong>${escapeHtml(docQueryName)}</strong>" at different hospitals. Select which hospital you are inquiring about:
+                            ${headerSub}
                         </div>
                     </div>
                 `;

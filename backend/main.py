@@ -226,6 +226,27 @@ def ask_question(request: QuestionRequest):
         doctor_name = intent_data.get("doctor_name")
         if doctor_name:
             results = get_doctor_by_name(doctor_name)
+            if len(results) > 1:
+                cand_list = []
+                for r in results:
+                    cand_list.append({
+                        "doctor_id": r.get("doctor_id"),
+                        "doctor": r.get("doctor"),
+                        "actual_specialty": r.get("specialization"),
+                        "hospital": r.get("hospital"),
+                        "district": r.get("district"),
+                        "is_specialty_match": None,
+                        "suggested_query": f"Tell me about {r.get('doctor')} at {r.get('hospital')}"
+                    })
+                return {
+                    "question": question,
+                    "intent": "doctor_disambiguation",
+                    "ambiguous": True,
+                    "doctor_name": doctor_name,
+                    "candidates": cand_list,
+                    "count": len(results),
+                    "results": results
+                }
         else:
             results = []
 

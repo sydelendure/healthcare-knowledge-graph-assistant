@@ -425,11 +425,11 @@ def check_doctor_specialty_with_graph_hopping(doctor_name, requested_specialty, 
                     "graph_hopped": False
                 }
 
-            # If multiple doctors sharing the same name are found at different hospitals
-            if len(candidates) > 1 and not hospital_name:
+            # If multiple doctors sharing the same name are found (across hospitals or within the same hospital)
+            if len(candidates) > 1:
                 disambiguation_list = []
                 for cand in candidates:
-                    is_match = (cand.get("actual_specialty", "").lower() == requested_specialty.lower())
+                    is_match = (cand.get("actual_specialty", "").lower() == requested_specialty.lower()) if requested_specialty else None
                     disambiguation_list.append({
                         "doctor_id": cand.get("doctor_id"),
                         "doctor": cand.get("doctor"),
@@ -437,13 +437,14 @@ def check_doctor_specialty_with_graph_hopping(doctor_name, requested_specialty, 
                         "hospital": cand.get("hospital"),
                         "district": cand.get("district"),
                         "is_specialty_match": is_match,
-                        "suggested_query": f"Is {cand.get('doctor')} at {cand.get('hospital')} in {requested_specialty}?"
+                        "suggested_query": f"Is {cand.get('doctor')} in {requested_specialty} at {cand.get('hospital')}?" if requested_specialty else f"Tell me about {cand.get('doctor')} ({cand.get('actual_specialty')}) at {cand.get('hospital')}"
                     })
 
                 return {
                     "ambiguous": True,
                     "doctor_name": doctor_name,
                     "requested_specialty": requested_specialty,
+                    "hospital_name": hospital_name,
                     "candidates": disambiguation_list,
                     "results": candidates,
                     "graph_hopped": False

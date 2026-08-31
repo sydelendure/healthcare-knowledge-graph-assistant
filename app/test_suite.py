@@ -55,7 +55,7 @@ def test_database_integrity():
         record_result("Location node count == 10", node_counts.get("Location") == 10, f"Got: {node_counts.get('Location')}")
         record_result("Speciality node count == 15", node_counts.get("Speciality") == 15, f"Got: {node_counts.get('Speciality')}")
         record_result("Hospital node count == 20", node_counts.get("Hospital") == 20, f"Got: {node_counts.get('Hospital')}")
-        record_result("Doctor node count == 50", node_counts.get("Doctor") == 50, f"Got: {node_counts.get('Doctor')}")
+        record_result("Doctor node count == 52", node_counts.get("Doctor") == 52, f"Got: {node_counts.get('Doctor')}")
         record_result("Department node count == 34", node_counts.get("Department") == 34, f"Got: {node_counts.get('Department')}")
         record_result("Service node count == 20", node_counts.get("Service") == 20, f"Got: {node_counts.get('Service')}")
 
