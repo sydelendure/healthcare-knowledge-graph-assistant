@@ -101,6 +101,16 @@
                         <span>Locations</span>
                     </button>
 
+                    <button class="nav-btn" id="nav-tour" onclick="openOnboardingModal()">
+                        <span class="nav-icon">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+                            </svg>
+                        </span>
+                        <span>Welcome Tour</span>
+                    </button>
+
                     <button class="nav-btn" id="nav-about" onclick="openAboutModal()">
                         <span class="nav-icon">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -198,6 +208,12 @@
 
             <!-- STAGE TOP BAR (ABOUT & THEME TOGGLE) -->
             <div class="stage-top-bar">
+                <button class="stage-about-btn" onclick="openOnboardingModal()" aria-label="Quick Tour" style="background: var(--primary-green-light); border-color: var(--primary-green-border); color: var(--primary-green);">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+                    </svg>
+                    <span>Tour</span>
+                </button>
                 <button class="stage-about-btn" onclick="openAboutModal()" aria-label="About HealthGraph">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="10" />
@@ -231,6 +247,11 @@
                 </button>
                 <span class="mobile-title">Healthcare Assistant</span>
                 <div style="display: flex; align-items: center; gap: 6px;">
+                    <button class="menu-btn" onclick="openOnboardingModal()" aria-label="Tour">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+                        </svg>
+                    </button>
                     <button class="menu-btn" onclick="openAboutModal()" aria-label="About">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
@@ -423,10 +444,10 @@
                 </div>
 
                 <div class="modal-stats-row">
-                    <div class="modal-stat"><strong>50</strong><span>Doctors</span></div>
+                    <div class="modal-stat"><strong>52</strong><span>Doctors</span></div>
                     <div class="modal-stat"><strong>20</strong><span>Hospitals</span></div>
                     <div class="modal-stat"><strong>15</strong><span>Specialties</span></div>
-                    <div class="modal-stat"><strong>10</strong><span>Locations</span></div>
+                    <div class="modal-stat"><strong>34</strong><span>Departments</span></div>
                 </div>
             </div>
 
@@ -442,6 +463,106 @@
         </div>
     </div>
 
+    <!-- VISUAL ONBOARDING & KNOWLEDGE GRAPH TOUR MODAL -->
+    <div class="onboarding-backdrop" id="onboardingModalBackdrop" onclick="closeOnboardingModal()">
+        <div class="onboarding-card" onclick="event.stopPropagation()">
+            
+            <!-- 3D KNOWLEDGE GRAPH HERO BANNER -->
+            <div class="onboarding-hero-banner">
+                <img src="{{ url_for('static', filename='onboarding_hero.jpg') }}" alt="Healthcare Knowledge Graph" class="onboarding-hero-image">
+                <div class="onboarding-hero-gradient">
+                    <div class="onboarding-hero-top">
+                        <span class="onboarding-badge">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                            Neo4j Multi-Hop Graph
+                        </span>
+                        <button class="onboarding-close-btn" onclick="closeOnboardingModal()" aria-label="Close guide">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                    <div class="onboarding-hero-title-box">
+                        <h2 class="onboarding-hero-title">Welcome to HealthGraph</h2>
+                        <p class="onboarding-hero-sub">The Intelligent Multi-Hop Healthcare Assistant</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SCROLLABLE TOUR CONTENT -->
+            <div class="onboarding-scroll-content">
+                
+                <!-- LIVE GRAPH METRICS STRIP -->
+                <div class="onboarding-stats-strip">
+                    <div class="onboarding-stat-box"><strong>52</strong><span>Doctors</span></div>
+                    <div class="onboarding-stat-box"><strong>20</strong><span>Hospitals</span></div>
+                    <div class="onboarding-stat-box"><strong>15</strong><span>Specialties</span></div>
+                    <div class="onboarding-stat-box"><strong>34</strong><span>Departments</span></div>
+                </div>
+
+                <!-- 3 CORE PILLARS -->
+                <div class="onboarding-pillars-grid">
+                    <div class="onboarding-pillar">
+                        <div class="onboarding-pillar-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        </div>
+                        <h4>Natural Discovery</h4>
+                        <p>Ask plain English questions without needing database queries or complex filters.</p>
+                    </div>
+                    <div class="onboarding-pillar">
+                        <div class="onboarding-pillar-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>
+                        </div>
+                        <h4>Multi-Hop Referrals</h4>
+                        <p>Traverses connected facility networks to find closest providers when not locally available.</p>
+                    </div>
+                    <div class="onboarding-pillar">
+                        <div class="onboarding-pillar-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        </div>
+                        <h4>Smart Disambiguation</h4>
+                        <p>Clarifies doctor name collisions strictly by hospital facility and medical department.</p>
+                    </div>
+                </div>
+
+                <!-- 1-CLICK QUICK STARTERS -->
+                <div class="onboarding-starters-section">
+                    <span class="onboarding-starters-label">Try a Sample Graph Query:</span>
+                    <div class="onboarding-starters-grid">
+                        <button class="onboarding-starter-btn" onclick="startTourQuery('Find cardiologists in South District')">
+                            <span>Cardiologists in South District</span>
+                            <span class="arrow">&rarr;</span>
+                        </button>
+                        <button class="onboarding-starter-btn" onclick="startTourQuery('general physician at Metro Central Medical Center')">
+                            <span>Multi-Hop Referral at Metro Central</span>
+                            <span class="arrow">&rarr;</span>
+                        </button>
+                        <button class="onboarding-starter-btn" onclick="startTourQuery('Dr Aarav')">
+                            <span>Name Collision Test (Dr. Aarav)</span>
+                            <span class="arrow">&rarr;</span>
+                        </button>
+                        <button class="onboarding-starter-btn" onclick="startTourQuery('Is Dr. Aarohi a Neurologist?')">
+                            <span>Specialty Verification Check</span>
+                            <span class="arrow">&rarr;</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FOOTER BAR -->
+            <div class="onboarding-footer-bar">
+                <label class="onboarding-pref-toggle">
+                    <input type="checkbox" id="dontShowTourCheckbox">
+                    <span>Don't show automatically on startup</span>
+                </label>
+                <div class="onboarding-actions">
+                    <button class="onboarding-cta" onclick="closeOnboardingModal()">
+                        <span>Start Exploring</span>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const welcome = document.getElementById("welcome");
         const messages = document.getElementById("messages");
@@ -453,22 +574,52 @@
         const sidebar = document.getElementById("sidebar");
         const backdrop = document.getElementById("sidebarBackdrop");
         const aboutModal = document.getElementById("aboutModalBackdrop");
+        const onboardingModal = document.getElementById("onboardingModalBackdrop");
+        const dontShowCheckbox = document.getElementById("dontShowTourCheckbox");
+
+        // ONBOARDING & TOUR MODAL HANDLERS
+        function openOnboardingModal() {
+            if (aboutModal.classList.contains("open")) {
+                closeAboutModal();
+            }
+            onboardingModal.classList.add("open");
+            toggleSidebar(false);
+        }
+
+        function closeOnboardingModal() {
+            onboardingModal.classList.remove("open");
+            if (dontShowCheckbox && dontShowCheckbox.checked) {
+                localStorage.setItem("healthgraph_onboarding_dismissed", "true");
+            }
+            welcomeInput.focus();
+        }
+
+        function startTourQuery(query) {
+            closeOnboardingModal();
+            askPredefined(query);
+        }
 
         // ABOUT MODAL HANDLERS
         function openAboutModal() {
+            if (onboardingModal.classList.contains("open")) {
+                closeOnboardingModal();
+            }
             aboutModal.classList.add("open");
             toggleSidebar(false);
         }
 
         function closeAboutModal() {
             aboutModal.classList.remove("open");
-            sessionStorage.setItem("healthgraph_has_seen_about", "true");
         }
 
-        // Close modal on Escape key
+        // Close modals on Escape key
         document.addEventListener("keydown", (e) => {
-            if (e.key === "Escape" && aboutModal.classList.contains("open")) {
-                closeAboutModal();
+            if (e.key === "Escape") {
+                if (onboardingModal && onboardingModal.classList.contains("open")) {
+                    closeOnboardingModal();
+                } else if (aboutModal && aboutModal.classList.contains("open")) {
+                    closeAboutModal();
+                }
             }
         });
 
@@ -507,12 +658,15 @@
             }
         }
 
-        // Initialize on page load (Auto-popup About on initial visit)
+        // Initialize on page load (Auto-popup Onboarding on initial visit)
         document.addEventListener("DOMContentLoaded", () => {
             initTheme();
 
-            if (!sessionStorage.getItem("healthgraph_has_seen_about")) {
-                openAboutModal();
+            const isDismissed = localStorage.getItem("healthgraph_onboarding_dismissed");
+            if (!isDismissed) {
+                setTimeout(() => {
+                    openOnboardingModal();
+                }, 120);
             } else {
                 welcomeInput.focus();
             }
@@ -882,9 +1036,9 @@
                 data.candidates.forEach(c => {
                     let matchBadge = '';
                     if (c.is_specialty_match === true) {
-                        matchBadge = `<span style="background: rgba(34, 197, 94, 0.15); color: #22c55e; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;">✓ MATCH: Certified in ${escapeHtml(c.actual_specialty || c.specialization)}</span>`;
+                        matchBadge = `<span style="background: rgba(34, 197, 94, 0.15); color: #22c55e; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;">MATCH: Certified in ${escapeHtml(c.actual_specialty || c.specialization)}</span>`;
                     } else if (c.is_specialty_match === false) {
-                        matchBadge = `<span style="background: rgba(239, 68, 68, 0.15); color: #f87171; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;">✕ MISMATCH: Certified in ${escapeHtml(c.actual_specialty || c.specialization)}${reqSpec ? ', not ' + escapeHtml(reqSpec) : ''}</span>`;
+                        matchBadge = `<span style="background: rgba(239, 68, 68, 0.15); color: #f87171; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;">MISMATCH: Certified in ${escapeHtml(c.actual_specialty || c.specialization)}${reqSpec ? ', not ' + escapeHtml(reqSpec) : ''}</span>`;
                     } else {
                         matchBadge = `<span style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;">Specialty: ${escapeHtml(c.actual_specialty || c.specialization)}</span>`;
                     }
