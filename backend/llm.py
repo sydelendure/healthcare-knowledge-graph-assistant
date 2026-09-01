@@ -180,15 +180,15 @@ def fast_rule_parser(q: str):
 
     spec = extract_specialty(q_low)
 
-    if doc_name and spec:
-        # Check if hospital name is also mentioned in the query
-        hosp_match = None
-        for h in ['apex advanced', 'apex regional', 'riverdale', 'metro central', 'north district', 'oakridge', 'bayview', 'highland', 'pinecrest', 'clearwater', 'silver spring', 'fairview', 'northfield']:
-            if h in q_low:
-                hosp_match = h.title()
-                break
+    # Extract hospital if present
+    hosp_match = None
+    for h in ['apex advanced', 'apex regional', 'riverdale', 'metro central', 'north district', 'oakridge', 'bayview', 'highland', 'pinecrest', 'clearwater', 'silver spring', 'fairview', 'northfield', 'specialty hospital', 'general hospital', 'medical center']:
+        if h in q_low:
+            hosp_match = h.title()
+            break
 
-        clean_doc = re.sub(r'(?i)\b(neurology|cardiology|dermatology|orthopedics|pediatrics|general medicine|doctor|dr\.?)\b', '', doc_name).strip()
+    if doc_name and spec:
+        clean_doc = re.sub(r'(?i)\b(neurology|cardiology|dermatology|orthopedics|pediatrics|general medicine|doctor|dr\.?|department|at|in)\b', '', doc_name).strip()
         clean_doc = re.sub(r'(?i)\b(a|an|is|in|at|for|the|of)\b$', '', clean_doc).strip()
         clean_doc = re.sub(r'^[.\s]+', '', clean_doc).strip()
         final_name = f"Dr. {clean_doc.title()}" if (clean_doc and not clean_doc.lower().startswith("dr")) else (clean_doc or doc_name)
@@ -201,14 +201,19 @@ def fast_rule_parser(q: str):
             ret['hospital_name'] = hosp_match
         return ret
 
-    if doc_name and ('who is' in q_low or 'tell me about' in q_low or 'details' in q_low or 'info' in q_low or len(q_low.split()) <= 4):
-        clean_doc = re.sub(r'(?i)\b(who is|tell me about|details|info)\b', '', doc_name).strip()
+    if doc_name and ('who is' in q_low or 'tell me about' in q_low or 'details' in q_low or 'info' in q_low or hosp_match or len(q_low.split()) <= 6):
+        clean_doc = re.sub(r'(?i)\b(who is|tell me about|details|info|department|at|in)\b', '', doc_name).strip()
+        if hosp_match:
+            clean_doc = re.sub(r'(?i)\b' + re.escape(hosp_match.lower()) + r'\b', '', clean_doc).strip()
         clean_doc = re.sub(r'^[.\s]+', '', clean_doc).strip()
         final_name = f"Dr. {clean_doc.title()}" if (clean_doc and not clean_doc.lower().startswith("dr")) else (clean_doc or doc_name)
-        return {
+        ret = {
             'intent': 'doctor_by_name',
             'doctor_name': final_name
         }
+        if hosp_match:
+            ret['hospital_name'] = hosp_match
+        return ret
 
     # 2. Specialty with location / district / hospital
     if spec:

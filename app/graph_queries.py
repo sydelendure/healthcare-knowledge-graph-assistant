@@ -330,7 +330,7 @@ def get_all_hospitals():
         db.close()
 
 
-def get_doctor_by_name(doctor_name):
+def get_doctor_by_name(doctor_name, hospital_name=None, specialty=None, department=None):
     clean_name = doctor_name.strip()
     for prefix in ["dr.", "doctor ", "dr ", "dr"]:
         if clean_name.lower().startswith(prefix):
@@ -339,16 +339,23 @@ def get_doctor_by_name(doctor_name):
 
     query = """
     MATCH (d:Doctor)
-    WHERE toLower(d.name) CONTAINS toLower($name)
+    WHERE (toLower(d.name) CONTAINS toLower($name)
        OR toLower(d.name) CONTAINS toLower($clean_name)
        OR toLower($name) CONTAINS toLower(d.name)
        OR toLower($clean_name) CONTAINS toLower(d.name)
+       OR (size($clean_name) > 2 AND ALL(w IN [x IN split(toLower($clean_name), " ") WHERE size(x) > 2] WHERE toLower(d.name) CONTAINS w)))
     OPTIONAL MATCH (d)-[:HAS_SPECIALTY]->(s:Speciality)
     OPTIONAL MATCH (d)-[:WORKS_AT]->(h:Hospital)-[:LOCATED_IN]->(l:Location)
+    OPTIONAL MATCH (h)-[:HAS_DEPARTMENT]->(dep:Department)-[:OFFERS_SPECIALTY]->(s)
+    WITH d, s, h, l, dep
+    WHERE ($hospital IS NULL OR toLower(h.name) CONTAINS toLower($hospital) OR toLower($hospital) CONTAINS toLower(h.name))
+      AND ($specialty IS NULL OR toLower(s.name) CONTAINS toLower($specialty) OR toLower($specialty) CONTAINS toLower(s.name))
+      AND ($department IS NULL OR toLower(dep.name) CONTAINS toLower($department) OR toLower($department) CONTAINS toLower(dep.name))
     RETURN
         d.doctor_id AS doctor_id,
         d.name AS doctor,
         s.name AS specialization,
+        coalesce(dep.name, s.name) AS department,
         h.hospital_id AS hospital_id,
         h.name AS hospital,
         l.city AS city,
@@ -359,7 +366,14 @@ def get_doctor_by_name(doctor_name):
     db = Neo4jDatabase()
     try:
         with db.driver.session() as session:
-            result = session.run(query, name=doctor_name, clean_name=clean_name)
+            result = session.run(
+                query,
+                name=doctor_name,
+                clean_name=clean_name,
+                hospital=hospital_name,
+                specialty=specialty,
+                department=department
+            )
             return [record.data() for record in result]
     finally:
         db.close()
@@ -374,7 +388,7 @@ def check_doctor_specialty_with_graph_hopping(doctor_name, requested_specialty, 
     db = Neo4jDatabase()
     try:
         with db.driver.session() as session:
-            # 1. Fetch matching doctor nodes
+            # 1. Fetch matching doctor nodes with department
             if hospital_name:
                 doc_query = """
                 MATCH (d:Doctor)-[:WORKS_AT]->(h:Hospital)-[:LOCATED_IN]->(l:Location),
@@ -383,12 +397,15 @@ def check_doctor_specialty_with_graph_hopping(doctor_name, requested_specialty, 
                    OR toLower(d.name) CONTAINS toLower($clean_name)
                    OR toLower($name) CONTAINS toLower(d.name)
                    OR toLower($clean_name) CONTAINS toLower(d.name)
-                   OR any(w IN split(toLower($clean_name), " ") WHERE size(w) > 2 AND toLower(d.name) CONTAINS w))
+                   OR (size($clean_name) > 2 AND ALL(w IN [x IN split(toLower($clean_name), " ") WHERE size(x) > 2] WHERE toLower(d.name) CONTAINS w)))
                   AND (toLower(h.name) CONTAINS toLower($hospital_name) OR toLower($hospital_name) CONTAINS toLower(h.name))
+                OPTIONAL MATCH (h)-[:HAS_DEPARTMENT]->(dep:Department)-[:OFFERS_SPECIALTY]->(s)
                 RETURN
                     d.doctor_id AS doctor_id,
                     d.name AS doctor,
                     s.name AS actual_specialty,
+                    s.name AS specialization,
+                    coalesce(dep.name, s.name) AS department,
                     h.hospital_id AS hospital_id,
                     h.name AS hospital,
                     l.city AS city,
@@ -399,15 +416,18 @@ def check_doctor_specialty_with_graph_hopping(doctor_name, requested_specialty, 
                 doc_query = """
                 MATCH (d:Doctor)-[:WORKS_AT]->(h:Hospital)-[:LOCATED_IN]->(l:Location),
                       (d)-[:HAS_SPECIALTY]->(s:Speciality)
-                WHERE toLower(d.name) CONTAINS toLower($name)
+                WHERE (toLower(d.name) CONTAINS toLower($name)
                    OR toLower(d.name) CONTAINS toLower($clean_name)
                    OR toLower($name) CONTAINS toLower(d.name)
                    OR toLower($clean_name) CONTAINS toLower(d.name)
-                   OR any(w IN split(toLower($clean_name), " ") WHERE size(w) > 2 AND toLower(d.name) CONTAINS w)
+                   OR (size($clean_name) > 2 AND ALL(w IN [x IN split(toLower($clean_name), " ") WHERE size(x) > 2] WHERE toLower(d.name) CONTAINS w)))
+                OPTIONAL MATCH (h)-[:HAS_DEPARTMENT]->(dep:Department)-[:OFFERS_SPECIALTY]->(s)
                 RETURN
                     d.doctor_id AS doctor_id,
                     d.name AS doctor,
                     s.name AS actual_specialty,
+                    s.name AS specialization,
+                    coalesce(dep.name, s.name) AS department,
                     h.hospital_id AS hospital_id,
                     h.name AS hospital,
                     l.city AS city,
@@ -427,17 +447,30 @@ def check_doctor_specialty_with_graph_hopping(doctor_name, requested_specialty, 
 
             # If multiple doctors sharing the same name are found (across hospitals or within the same hospital)
             if len(candidates) > 1:
+                unique_hosps = list(dict.fromkeys([c.get("hospital") for c in candidates if c.get("hospital")]))
                 disambiguation_list = []
                 for cand in candidates:
                     is_match = (cand.get("actual_specialty", "").lower() == requested_specialty.lower()) if requested_specialty else None
+                    cand_dept = cand.get("department") or cand.get("actual_specialty")
+                    cand_spec = cand.get("actual_specialty")
+                    cand_hosp = cand.get("hospital")
+                    
+                    if len(unique_hosps) == 1:
+                        sugg = f"Is {cand.get('doctor')} in {cand_dept} ({cand_spec}) at {cand_hosp}?" if requested_specialty else f"Tell me about {cand.get('doctor')} in {cand_dept} Department at {cand_hosp}"
+                    else:
+                        sugg = f"Is {cand.get('doctor')} in {requested_specialty} at {cand_hosp}?" if requested_specialty else f"Tell me about {cand.get('doctor')} ({cand_spec}) at {cand_hosp}"
+
                     disambiguation_list.append({
                         "doctor_id": cand.get("doctor_id"),
                         "doctor": cand.get("doctor"),
-                        "actual_specialty": cand.get("actual_specialty"),
-                        "hospital": cand.get("hospital"),
+                        "actual_specialty": cand_spec,
+                        "specialization": cand_spec,
+                        "department": cand_dept,
+                        "hospital": cand_hosp,
                         "district": cand.get("district"),
+                        "city": cand.get("city"),
                         "is_specialty_match": is_match,
-                        "suggested_query": f"Is {cand.get('doctor')} in {requested_specialty} at {cand.get('hospital')}?" if requested_specialty else f"Tell me about {cand.get('doctor')} ({cand.get('actual_specialty')}) at {cand.get('hospital')}"
+                        "suggested_query": sugg
                     })
 
                 return {

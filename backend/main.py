@@ -142,6 +142,78 @@ def closest_hospitals(
     }
 
 
+def create_disambiguation_payload(
+    question: str,
+    doctor_name: str,
+    results: list,
+    requested_specialty: str = None,
+    requested_hospital: str = None
+):
+    unique_hosps = list(dict.fromkeys([r.get("hospital") for r in results if r.get("hospital")]))
+
+    cand_list = []
+    for r in results:
+        doc = r.get("doctor") or doctor_name
+        spec = r.get("specialization") or r.get("actual_specialty") or "General Medicine"
+        dept = r.get("department") or (f"{spec} Department" if spec else "Clinical Department")
+        hosp = r.get("hospital") or "Hospital"
+        dist = r.get("district") or ""
+        city = r.get("city") or ""
+
+        if len(unique_hosps) == 1:
+            suggested_q = f"Tell me about {doc} in {dept} ({spec}) at {hosp}"
+        else:
+            suggested_q = f"Tell me about {doc} ({spec}) at {hosp}"
+
+        cand_list.append({
+            "doctor_id": r.get("doctor_id"),
+            "doctor": doc,
+            "actual_specialty": spec,
+            "specialization": spec,
+            "department": dept,
+            "hospital": hosp,
+            "district": dist,
+            "city": city,
+            "is_specialty_match": (spec.lower() == requested_specialty.lower()) if requested_specialty else None,
+            "suggested_query": suggested_q
+        })
+
+    if len(unique_hosps) == 1:
+        hosp_name = unique_hosps[0]
+        disambiguation_type = "same_hospital"
+        clarification_prompt = (
+            f"Multiple doctors named '{doctor_name}' were found at {hosp_name}. "
+            "Which department and specialization are you looking for?"
+        )
+    elif len(unique_hosps) == len(results):
+        disambiguation_type = "different_hospitals"
+        clarification_prompt = (
+            f"Multiple doctors named '{doctor_name}' were found across different hospitals. "
+            "Which hospital and specialization are you looking for?"
+        )
+    else:
+        disambiguation_type = "mixed"
+        clarification_prompt = (
+            f"Multiple doctors named '{doctor_name}' were found across multiple hospitals and departments. "
+            "Which hospital, department, and specialization are you looking for?"
+        )
+
+    return {
+        "question": question,
+        "intent": "doctor_disambiguation",
+        "ambiguous": True,
+        "disambiguation_type": disambiguation_type,
+        "doctor_name": doctor_name,
+        "hospital_name": unique_hosps[0] if len(unique_hosps) == 1 else requested_hospital,
+        "requested_specialty": requested_specialty,
+        "clarification_prompt": clarification_prompt,
+        "message": clarification_prompt,
+        "candidates": cand_list,
+        "count": len(results),
+        "results": results
+    }
+
+
 @app.post("/ask")
 def ask_question(request: QuestionRequest):
 
@@ -224,29 +296,19 @@ def ask_question(request: QuestionRequest):
     elif intent == "doctor_by_name":
 
         doctor_name = intent_data.get("doctor_name")
+        hospital_name = intent_data.get("hospital_name") or intent_data.get("hospital") or intent_data.get("location")
+        specialty = intent_data.get("specialty")
+        department = intent_data.get("department")
         if doctor_name:
-            results = get_doctor_by_name(doctor_name)
+            results = get_doctor_by_name(doctor_name, hospital_name=hospital_name, specialty=specialty, department=department)
             if len(results) > 1:
-                cand_list = []
-                for r in results:
-                    cand_list.append({
-                        "doctor_id": r.get("doctor_id"),
-                        "doctor": r.get("doctor"),
-                        "actual_specialty": r.get("specialization"),
-                        "hospital": r.get("hospital"),
-                        "district": r.get("district"),
-                        "is_specialty_match": None,
-                        "suggested_query": f"Tell me about {r.get('doctor')} at {r.get('hospital')}"
-                    })
-                return {
-                    "question": question,
-                    "intent": "doctor_disambiguation",
-                    "ambiguous": True,
-                    "doctor_name": doctor_name,
-                    "candidates": cand_list,
-                    "count": len(results),
-                    "results": results
-                }
+                return create_disambiguation_payload(
+                    question=question,
+                    doctor_name=doctor_name,
+                    results=results,
+                    requested_specialty=specialty,
+                    requested_hospital=hospital_name
+                )
         else:
             results = []
 
@@ -259,16 +321,13 @@ def ask_question(request: QuestionRequest):
             check_res = check_doctor_specialty_with_graph_hopping(doctor_name, specialty, hospital_name=hospital_name)
             results = check_res.get("results", [])
             if check_res.get("ambiguous"):
-                return {
-                    "question": question,
-                    "intent": "doctor_disambiguation",
-                    "ambiguous": True,
-                    "doctor_name": check_res.get("doctor_name"),
-                    "requested_specialty": check_res.get("requested_specialty"),
-                    "candidates": check_res.get("candidates", []),
-                    "count": len(results),
-                    "results": results
-                }
+                return create_disambiguation_payload(
+                    question=question,
+                    doctor_name=check_res.get("doctor_name") or doctor_name,
+                    results=check_res.get("candidates", results),
+                    requested_specialty=check_res.get("requested_specialty") or specialty,
+                    requested_hospital=hospital_name
+                )
             if check_res.get("graph_hopped"):
                 graph_hop_info = {
                     "graph_hopped": True,
@@ -288,7 +347,15 @@ def ask_question(request: QuestionRequest):
                     "requested_specialty": check_res.get("requested_specialty")
                 }
         elif doctor_name:
-            results = get_doctor_by_name(doctor_name)
+            results = get_doctor_by_name(doctor_name, hospital_name=hospital_name)
+            if len(results) > 1:
+                return create_disambiguation_payload(
+                    question=question,
+                    doctor_name=doctor_name,
+                    results=results,
+                    requested_specialty=None,
+                    requested_hospital=hospital_name
+                )
         elif specialty:
             results = get_doctors_by_specialty(specialty)
         else:
