@@ -277,20 +277,39 @@
             <!-- CHAT FEED & MESSAGES -->
             <div class="feed-container" id="chatArea">
 
-                <!-- WELCOME HERO STATE -->
+                <!-- WELCOME HERO ONBOARDING STATE -->
                 <div class="welcome-container" id="welcome">
-                    <div class="welcome-hero">
-                        <h1 class="welcome-title">Healthcare Knowledge Assistant</h1>
-                        <p class="welcome-subtitle">
-                            Ask anything about doctors, medical specialties, hospitals, and regional clinics.
-                        </p>
+                    
+                    <!-- 3D HERO ARTWORK CARD -->
+                    <div class="welcome-hero-card">
+                        <div class="welcome-hero-banner">
+                            <img src="{{ url_for('static', filename='onboarding_hero.jpg') }}" alt="Healthcare Knowledge Graph" class="welcome-hero-img">
+                            <div class="welcome-hero-overlay">
+                                <div class="welcome-badge">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                                    <span>Neo4j Multi-Hop Graph</span>
+                                </div>
+                                <h1 class="welcome-title">Healthcare Knowledge Assistant</h1>
+                                <p class="welcome-subtitle">
+                                    Natural-language AI connected directly to a certified medical knowledge graph.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- LIVE GRAPH STATS STRIP -->
+                        <div class="welcome-stats-strip">
+                            <div class="welcome-stat-box"><strong>52</strong><span>Doctors</span></div>
+                            <div class="welcome-stat-box"><strong>20</strong><span>Hospitals</span></div>
+                            <div class="welcome-stat-box"><strong>15</strong><span>Specialties</span></div>
+                            <div class="welcome-stat-box"><strong>34</strong><span>Departments</span></div>
+                        </div>
                     </div>
 
                     <!-- HERO SEARCH BAR (IN WELCOME SCREEN) -->
                     <div class="welcome-input-card">
                         <div class="welcome-input-box">
                             <textarea id="welcomeQuestionInput" class="welcome-textarea"
-                                placeholder="Find cardiologists in South District..." rows="1"
+                                placeholder="Ask anything, e.g. 'Find cardiologists in South District'..." rows="1"
                                 onkeydown="handleWelcomeKeyDown(event)"></textarea>
                             <button id="welcomeSendBtn" class="send-action-btn" onclick="sendWelcomeQuestion()"
                                 aria-label="Send question">
@@ -302,28 +321,55 @@
                         </div>
                     </div>
 
+                    <!-- 3 CORE CAPABILITY PILLARS -->
+                    <div class="welcome-pillars-grid">
+                        <div class="welcome-pillar" onclick="askPredefined('general physicians')">
+                            <div class="welcome-pillar-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                            </div>
+                            <h4>Natural Discovery</h4>
+                            <p>Search doctors across 15 fields using natural everyday language.</p>
+                        </div>
+                        <div class="welcome-pillar" onclick="askPredefined('general physician at Metro Central Medical Center')">
+                            <div class="welcome-pillar-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>
+                            </div>
+                            <h4>Multi-Hop Referrals</h4>
+                            <p>Traverses connected networks for nearest facilities when not locally present.</p>
+                        </div>
+                        <div class="welcome-pillar" onclick="askPredefined('Dr Aarav')">
+                            <div class="welcome-pillar-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                            </div>
+                            <h4>Smart Disambiguation</h4>
+                            <p>Strictly clarifies duplicate names by hospital and medical department.</p>
+                        </div>
+                    </div>
+
                     <!-- SUGGESTED QUERY PILLS -->
                     <div class="quick-suggestions-block">
                         <div class="suggestions-group">
-                            <span class="suggestions-label">Popular Suggestions:</span>
+                            <span class="suggestions-label">Popular Starters:</span>
                             <div class="suggestions-pills">
                                 <button class="suggestion-chip"
                                     onclick="askPredefined('Find cardiologists in South District')">
                                     Cardiologists in South District
                                 </button>
-                                <button class="suggestion-chip" onclick="askPredefined('general physicians')">
-                                    General Physicians
+                                <button class="suggestion-chip"
+                                    onclick="askPredefined('general physician at Metro Central Medical Center')">
+                                    Multi-Hop Referral (Metro Central)
+                                </button>
+                                <button class="suggestion-chip"
+                                    onclick="askPredefined('Dr Aarav')">
+                                    Name Collision (Dr. Aarav)
+                                </button>
+                                <button class="suggestion-chip"
+                                    onclick="askPredefined('Is Dr. Aarohi a Neurologist?')">
+                                    Specialty Check (Dr. Aarohi)
                                 </button>
                                 <button class="suggestion-chip"
                                     onclick="askPredefined('Show doctors at Apex Advanced Medical Center')">
                                     Doctors at Apex Advanced Med
-                                </button>
-                                <button class="suggestion-chip"
-                                    onclick="askPredefined('Find neurologists in North District')">
-                                    Neurologists in North District
-                                </button>
-                                <button class="suggestion-chip" onclick="askPredefined('neurologist at oak ridge')">
-                                    Neurologist at Oakridge
                                 </button>
                                 <button class="suggestion-chip"
                                     onclick="askPredefined('Find hospitals in South District')">
