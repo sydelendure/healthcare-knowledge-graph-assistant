@@ -152,6 +152,7 @@ def build_subgraph_from_results(
     nodes = []
     links = []
     node_ids = set()
+    link_keys = set()
 
     def add_node(node_id, label, node_type, color, radius=13, properties=None):
         if not node_id or node_id in node_ids:
@@ -169,6 +170,10 @@ def build_subgraph_from_results(
     def add_link(source_id, target_id, label, properties=None):
         if not source_id or not target_id or source_id == target_id:
             return
+        key = (str(source_id), str(target_id), str(label))
+        if key in link_keys:
+            return
+        link_keys.add(key)
         links.append({
             "source": str(source_id),
             "target": str(target_id),
