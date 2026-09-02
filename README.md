@@ -24,11 +24,11 @@ An intelligent, conversational healthcare assistant powered by a **Neo4j Knowled
 
 ---
 
-### 2. Multi-Hop Shortest-Path Hospital Referrals
-* **Multi-hop shortest-path traversal using Neo4j's `shortestPath()` with cumulative distance calculation and hop/distance ranking.**
-* When a requested specialty is not available at an origin facility (e.g. *"General physician at Metro Central Medical Center"*), the assistant traverses the hospital connection network (`:CONNECTED_TO {distance_km}`) to identify the nearest reachable facility offering that specialty.
-* Calculates the cumulative road distance in kilometers using Cypher's `reduce()` aggregation (e.g., *6.2 km via Northfield Community Hospital*) and ranks candidate routes by `ORDER BY hop_distance ASC, total_distance_km ASC`.
-* *Note on True Minimum-Distance Routing*: The current production traversal uses Neo4j's native unweighted `shortestPath()` combined with cumulative edge-distance aggregation and hop/distance sorting. For strict weighted minimum-distance routing regardless of hop count, weighted shortest-path algorithms via Neo4j Graph Data Science (`gds.shortestPath.dijkstra`) or exhaustive variable-length weighted path evaluation can be configured.
+### 2. Multi-Hop Hospital Referrals (Dijkstra's Shortest Path Algorithm)
+* **True minimum-distance routing using Dijkstra's Algorithm (`apoc.algo.dijkstra`) across the weighted `:CONNECTED_TO {distance_km}` hospital network.**
+* When a requested specialty is not available at an origin facility (e.g. *"General physician at Metro Central Medical Center"*), the routing engine applies Dijkstra's algorithm to calculate the exact shortest road route across connected facilities.
+* Returns the closest reachable facility offering that specialty along with the exact road distance in kilometers (e.g., *6.2 km via Northfield Community Hospital*) and step-by-step path trace (`Metro Central -> North District Specialty -> Northfield Community`).
+* Includes automatic fallback to variable-length weighted path evaluation with Cypher `reduce()` distance minimization if APOC is not present.
 
 ---
 
@@ -98,7 +98,7 @@ flowchart TD
     subgraph QueryLayer ["3. GRAPH ALGORITHM & CYPHER ENGINE"]
         CypherEngine["Parameterized Cypher Queries<br/>• Doctor Discovery by Specialty / District<br/>• Facility Lookups & Certified Affiliations"]:::cypherStyle
         
-        ShortestPath["Multi-Hop Shortest-Path Road Referral<br/>• shortestPath() across :CONNECTED_TO<br/>• Cumulative reduce() distance calculation<br/>• Hop & Distance Ordering (min hops & km)"]:::algoStyle
+        ShortestPath["Dijkstra Shortest-Path Road Referral<br/>• apoc.algo.dijkstra on :CONNECTED_TO<br/>• Weighted distance_km minimization<br/>• Resolves Closest Facility in km"]:::algoStyle
         
         MismatchVerify["Specialty Mismatch Verification<br/>• Validates Practitioner Credentials<br/>• Cross-Facility Network Traversal"]:::algoStyle
     end
@@ -120,7 +120,7 @@ flowchart TD
     HybridNLP -->|"Duplicate Doctor Name"| DisambigEngine
     
     CypherEngine -->|"Bolt Protocol (neo4j+s://)"| Neo4j
-    ShortestPath -->|"shortestPath() Cypher Query"| Neo4j
+    ShortestPath -->|"apoc.algo.dijkstra Query"| Neo4j
     MismatchVerify -->|"Credential Verification Query"| Neo4j
     DisambigEngine -->|"Candidate Grouping Query"| Neo4j
     
@@ -159,7 +159,7 @@ sequenceDiagram
     Cypher->>Neo4j: Query direct facility specialty
     Neo4j-->>Cypher: Specialty not available at Metro Central
     
-    Cypher->>Neo4j: shortestPath((origin)-[:CONNECTED_TO*1..5]-(target)) + reduce() distance
+    Cypher->>Neo4j: apoc.algo.dijkstra(origin, target, "CONNECTED_TO", "distance_km")
     Neo4j-->>Cypher: Path: Metro Central -> Northfield (6.2 km, Dr. Amaya Desai)
     
     Cypher-->>FastAPI: Results + Hop Info (origin, target, path, distance)

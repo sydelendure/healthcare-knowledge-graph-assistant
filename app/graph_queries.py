@@ -81,15 +81,15 @@ def find_doctors_with_graph_hopping(specialty, location):
                     "graph_hopped": False
                 }
 
-            # 2. Multi-hop shortest-path traversal using Neo4j's shortestPath() with cumulative distance calculation and hop/distance ranking
-            shortest_path_query = """
+            # 2. Dijkstra Weighted Shortest Path Traversal via :CONNECTED_TO Hospital Network
+            dijkstra_query = """
             MATCH (origin:Hospital)
             WHERE toLower(origin.name) CONTAINS toLower($location)
                OR toLower($location) CONTAINS toLower(origin.name)
                OR any(w IN split(toLower($location), " ") WHERE size(w) > 3 AND NOT w IN ["hospital", "center", "medical", "clinic"] AND toLower(origin.name) CONTAINS w)
             MATCH (target:Hospital)<-[:WORKS_AT]-(d:Doctor)-[:HAS_SPECIALTY]->(s:Speciality)
             WHERE toLower(s.name) = toLower($specialty) AND target <> origin
-            MATCH p = shortestPath((origin)-[:CONNECTED_TO*1..5]-(target))
+            CALL apoc.algo.dijkstra(origin, target, "CONNECTED_TO", "distance_km") YIELD path, weight
             OPTIONAL MATCH (target)-[:LOCATED_IN]->(l:Location)
             RETURN
                 d.doctor_id AS doctor_id,
@@ -99,27 +99,58 @@ def find_doctors_with_graph_hopping(specialty, location):
                 target.name AS hospital,
                 l.city AS city,
                 l.district AS district,
-                length(p) AS hop_distance,
-                round(reduce(total = 0.0, rel in relationships(p) | total + coalesce(rel.distance_km, 3.0)) * 10) / 10.0 AS total_distance_km,
-                [rel in relationships(p) | coalesce(rel.distance_km, 3.0)] AS step_distances,
-                [node in nodes(p) | node.name] AS traversal_path,
+                length(path) AS hop_distance,
+                round(weight * 10) / 10.0 AS total_distance_km,
+                [rel in relationships(path) | coalesce(rel.distance_km, 3.0)] AS step_distances,
+                [node in nodes(path) | node.name] AS traversal_path,
                 origin.name AS origin_name,
                 target.name AS target_name
-            ORDER BY hop_distance ASC, total_distance_km ASC, d.name ASC
+            ORDER BY total_distance_km ASC, hop_distance ASC, d.name ASC
             """
-            sp_results = [r.data() for r in session.run(shortest_path_query, specialty=specialty, location=location)]
+            try:
+                sp_results = [r.data() for r in session.run(dijkstra_query, specialty=specialty, location=location)]
+            except Exception:
+                fallback_dijkstra_query = """
+                MATCH (origin:Hospital)
+                WHERE toLower(origin.name) CONTAINS toLower($location)
+                   OR toLower($location) CONTAINS toLower(origin.name)
+                   OR any(w IN split(toLower($location), " ") WHERE size(w) > 3 AND NOT w IN ["hospital", "center", "medical", "clinic"] AND toLower(origin.name) CONTAINS w)
+                MATCH (target:Hospital)<-[:WORKS_AT]-(d:Doctor)-[:HAS_SPECIALTY]->(s:Speciality)
+                WHERE toLower(s.name) = toLower($specialty) AND target <> origin
+                MATCH p = (origin)-[:CONNECTED_TO*1..4]-(target)
+                OPTIONAL MATCH (target)-[:LOCATED_IN]->(l:Location)
+                WITH d, s, target, l, origin, p,
+                     round(reduce(total = 0.0, rel in relationships(p) | total + coalesce(rel.distance_km, 3.0)) * 10) / 10.0 AS total_distance_km
+                RETURN
+                    d.doctor_id AS doctor_id,
+                    d.name AS doctor,
+                    s.name AS specialization,
+                    target.hospital_id AS hospital_id,
+                    target.name AS hospital,
+                    l.city AS city,
+                    l.district AS district,
+                    length(p) AS hop_distance,
+                    total_distance_km,
+                    [rel in relationships(p) | coalesce(rel.distance_km, 3.0)] AS step_distances,
+                    [node in nodes(p) | node.name] AS traversal_path,
+                    origin.name AS origin_name,
+                    target.name AS target_name
+                ORDER BY total_distance_km ASC, hop_distance ASC, d.name ASC
+                """
+                sp_results = [r.data() for r in session.run(fallback_dijkstra_query, specialty=specialty, location=location)]
+
             if sp_results:
-                min_hop = sp_results[0]["hop_distance"]
-                closest_results = [r for r in sp_results if r["hop_distance"] == min_hop]
+                min_distance = sp_results[0]["total_distance_km"]
+                closest_results = [r for r in sp_results if r["total_distance_km"] == min_distance]
                 first_match = sp_results[0]
                 return {
                     "results": closest_results,
                     "graph_hopped": True,
-                    "hop_type": "shortest_path",
+                    "hop_type": "dijkstra_shortest_path",
                     "hop_origin": first_match.get("origin_name") or location,
                     "hop_target": first_match.get("target_name"),
-                    "hop_distance": min_hop,
-                    "total_distance_km": first_match.get("total_distance_km"),
+                    "hop_distance": first_match.get("hop_distance"),
+                    "total_distance_km": min_distance,
                     "step_distances": first_match.get("step_distances", []),
                     "traversal_path": first_match.get("traversal_path", [])
                 }
@@ -589,20 +620,20 @@ def check_doctor_specialty_with_graph_hopping(doctor_name, requested_specialty, 
 
 def find_closest_hospitals(origin_hospital, specialty=None):
     """
-    Multi-hop shortest-path traversal using Neo4j's shortestPath() with cumulative distance calculation and hop/distance ranking.
+    Finds the closest hospital(s) in the referral network using Dijkstra's weighted shortest path algorithm.
     """
     db = Neo4jDatabase()
     try:
         with db.driver.session() as session:
             if specialty:
-                query = """
+                dijkstra_query = """
                 MATCH (origin:Hospital)
                 WHERE toLower(origin.name) CONTAINS toLower($origin_hospital)
                    OR toLower($origin_hospital) CONTAINS toLower(origin.name)
                    OR any(w IN split(toLower($origin_hospital), " ") WHERE size(w) > 3 AND NOT w IN ["hospital", "center", "medical", "clinic"] AND toLower(origin.name) CONTAINS w)
                 MATCH (target:Hospital)<-[:WORKS_AT]-(d:Doctor)-[:HAS_SPECIALTY]->(s:Speciality)
                 WHERE toLower(s.name) = toLower($specialty) AND target <> origin
-                MATCH p = shortestPath((origin)-[:CONNECTED_TO*1..5]-(target))
+                CALL apoc.algo.dijkstra(origin, target, "CONNECTED_TO", "distance_km") YIELD path, weight
                 OPTIONAL MATCH (target)-[:LOCATED_IN]->(l:Location)
                 RETURN
                     target.hospital_id AS hospital_id,
@@ -610,23 +641,50 @@ def find_closest_hospitals(origin_hospital, specialty=None):
                     target.type AS hospital_type,
                     l.city AS city,
                     l.district AS district,
-                    length(p) AS hop_distance,
-                    round(reduce(total = 0.0, rel in relationships(p) | total + coalesce(rel.distance_km, 3.0)) * 10) / 10.0 AS total_distance_km,
-                    [rel in relationships(p) | coalesce(rel.distance_km, 3.0)] AS step_distances,
-                    [node in nodes(p) | node.name] AS traversal_path,
+                    length(path) AS hop_distance,
+                    round(weight * 10) / 10.0 AS total_distance_km,
+                    [rel in relationships(path) | coalesce(rel.distance_km, 3.0)] AS step_distances,
+                    [node in nodes(path) | node.name] AS traversal_path,
                     collect(d.name) AS doctors
-                ORDER BY hop_distance ASC, total_distance_km ASC
+                ORDER BY total_distance_km ASC, hop_distance ASC
                 """
-                results = [r.data() for r in session.run(query, origin_hospital=origin_hospital, specialty=specialty)]
+                try:
+                    results = [r.data() for r in session.run(dijkstra_query, origin_hospital=origin_hospital, specialty=specialty)]
+                except Exception:
+                    fallback_query = """
+                    MATCH (origin:Hospital)
+                    WHERE toLower(origin.name) CONTAINS toLower($origin_hospital)
+                       OR toLower($origin_hospital) CONTAINS toLower(origin.name)
+                       OR any(w IN split(toLower($origin_hospital), " ") WHERE size(w) > 3 AND NOT w IN ["hospital", "center", "medical", "clinic"] AND toLower(origin.name) CONTAINS w)
+                    MATCH (target:Hospital)<-[:WORKS_AT]-(d:Doctor)-[:HAS_SPECIALTY]->(s:Speciality)
+                    WHERE toLower(s.name) = toLower($specialty) AND target <> origin
+                    MATCH p = (origin)-[:CONNECTED_TO*1..4]-(target)
+                    OPTIONAL MATCH (target)-[:LOCATED_IN]->(l:Location)
+                    WITH target, l, p, collect(d.name) AS docs,
+                         round(reduce(total = 0.0, rel in relationships(p) | total + coalesce(rel.distance_km, 3.0)) * 10) / 10.0 AS total_distance_km
+                    RETURN
+                        target.hospital_id AS hospital_id,
+                        target.name AS hospital,
+                        target.type AS hospital_type,
+                        l.city AS city,
+                        l.district AS district,
+                        length(p) AS hop_distance,
+                        total_distance_km,
+                        [rel in relationships(p) | coalesce(rel.distance_km, 3.0)] AS step_distances,
+                        [node in nodes(p) | node.name] AS traversal_path,
+                        docs AS doctors
+                    ORDER BY total_distance_km ASC, hop_distance ASC
+                    """
+                    results = [r.data() for r in session.run(fallback_query, origin_hospital=origin_hospital, specialty=specialty)]
             else:
-                query = """
+                dijkstra_query = """
                 MATCH (origin:Hospital)
                 WHERE toLower(origin.name) CONTAINS toLower($origin_hospital)
                    OR toLower($origin_hospital) CONTAINS toLower(origin.name)
                    OR any(w IN split(toLower($origin_hospital), " ") WHERE size(w) > 3 AND NOT w IN ["hospital", "center", "medical", "clinic"] AND toLower(origin.name) CONTAINS w)
                 MATCH (target:Hospital)
                 WHERE target <> origin
-                MATCH p = shortestPath((origin)-[:CONNECTED_TO*1..5]-(target))
+                CALL apoc.algo.dijkstra(origin, target, "CONNECTED_TO", "distance_km") YIELD path, weight
                 OPTIONAL MATCH (target)-[:LOCATED_IN]->(l:Location)
                 RETURN
                     target.hospital_id AS hospital_id,
@@ -634,13 +692,39 @@ def find_closest_hospitals(origin_hospital, specialty=None):
                     target.type AS hospital_type,
                     l.city AS city,
                     l.district AS district,
-                    length(p) AS hop_distance,
-                    round(reduce(total = 0.0, rel in relationships(p) | total + coalesce(rel.distance_km, 3.0)) * 10) / 10.0 AS total_distance_km,
-                    [rel in relationships(p) | coalesce(rel.distance_km, 3.0)] AS step_distances,
-                    [node in nodes(p) | node.name] AS traversal_path
-                ORDER BY hop_distance ASC, total_distance_km ASC
+                    length(path) AS hop_distance,
+                    round(weight * 10) / 10.0 AS total_distance_km,
+                    [rel in relationships(path) | coalesce(rel.distance_km, 3.0)] AS step_distances,
+                    [node in nodes(path) | node.name] AS traversal_path
+                ORDER BY total_distance_km ASC, hop_distance ASC
                 """
-                results = [r.data() for r in session.run(query, origin_hospital=origin_hospital)]
+                try:
+                    results = [r.data() for r in session.run(dijkstra_query, origin_hospital=origin_hospital)]
+                except Exception:
+                    fallback_query = """
+                    MATCH (origin:Hospital)
+                    WHERE toLower(origin.name) CONTAINS toLower($origin_hospital)
+                       OR toLower($origin_hospital) CONTAINS toLower(origin.name)
+                       OR any(w IN split(toLower($origin_hospital), " ") WHERE size(w) > 3 AND NOT w IN ["hospital", "center", "medical", "clinic"] AND toLower(origin.name) CONTAINS w)
+                    MATCH (target:Hospital)
+                    WHERE target <> origin
+                    MATCH p = (origin)-[:CONNECTED_TO*1..4]-(target)
+                    OPTIONAL MATCH (target)-[:LOCATED_IN]->(l:Location)
+                    WITH target, l, p,
+                         round(reduce(total = 0.0, rel in relationships(p) | total + coalesce(rel.distance_km, 3.0)) * 10) / 10.0 AS total_distance_km
+                    RETURN
+                        target.hospital_id AS hospital_id,
+                        target.name AS hospital,
+                        target.type AS hospital_type,
+                        l.city AS city,
+                        l.district AS district,
+                        length(p) AS hop_distance,
+                        total_distance_km,
+                        [rel in relationships(p) | coalesce(rel.distance_km, 3.0)] AS step_distances,
+                        [node in nodes(p) | node.name] AS traversal_path
+                    ORDER BY total_distance_km ASC, hop_distance ASC
+                    """
+                    results = [r.data() for r in session.run(fallback_query, origin_hospital=origin_hospital)]
 
             return results
     finally:
