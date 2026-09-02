@@ -1,823 +1,227 @@
-# Healthcare Knowledge Graph Assistant
+# Healthcare Knowledge Graph Assistant (HealthGraph)
 
-A natural-language-powered healthcare assistant that enables users to query structured healthcare information using conversational questions.
-
-The application combines a **Neo4j Knowledge Graph**, **FastAPI**, **Flask**, and **Groq LLM** to translate natural-language questions into structured intents and retrieve relevant information about doctors, hospitals, specialties, and locations.
-
-Example questions include:
-
-```text
-Show cardiologists in South District
-Tell me about Dr Arohi
-Which doctors work at City Hospital?
-Show hospitals in South District
-Find doctors in North District
-```
-
-The goal is to provide a simple natural-language interface over a structured knowledge graph without requiring users to understand Cypher or database schemas.
+An intelligent, conversational healthcare assistant powered by a **Neo4j Knowledge Graph**, **FastAPI**, **Flask**, and a **Hybrid NLP Engine (Fast Deterministic Parser + Groq/OpenAI LLM)**. HealthGraph translates natural-language clinical queries into deterministic Cypher graph traversals, providing doctor discovery, multi-hospital shortest-path referrals, smart doctor disambiguation, and interactive in-chat force-directed graph visualizations.
 
 ---
 
-## Project Overview
+## Key Features
 
-Healthcare information contains many relationships:
-
-* Doctors have specialties.
-* Doctors work at hospitals.
-* Hospitals are located in specific districts.
-* Healthcare services are associated with hospitals and departments.
-
-A relational or filter-based interface requires users to explicitly provide these values. This project allows users to express the same requirements naturally.
-
-For example:
-
-```text
-Show cardiologists in South District
-```
-
-is interpreted as:
-
-```text
-Intent:      doctors_by_specialty
-Specialty:   Cardiology
-District:    South District
-```
-
-The structured intent is then mapped to a predefined graph query and executed against Neo4j.
+### 1. Interactive In-Chat Subgraph Visualizer (D3.js Force-Directed Graph)
+* **Live Graph Exploration**: Every response dynamically renders an interactive, physics-based 2D force-directed graph representing the exact traversed Cypher subgraph.
+* **Entity Categorization**: Nodes are visually distinct by domain type:
+  * **Doctor** (`#10b981` Emerald)
+  * **Hospital** (`#06b6d4` Cyan)
+  * **Specialty** (`#8b5cf6` Purple)
+  * **Department** (`#f59e0b` Amber)
+  * **Location** (`#3b82f6` Blue)
+  * **Origin Facility** (`#f43f5e` Crimson for referral origin points)
+* **Interactive Controls**:
+  * Drag nodes to reposition them in real time.
+  * Hover over nodes for floating glassmorphic property inspection tooltips.
+  * Click any node to focus on its direct neighbors and connected relationships while dimming unrelated nodes.
+  * Zoom In (`+`), Zoom Out (`-`), Reset View, and Toggle Full-Width Canvas.
+* **Deduplicated Relationships**: Ensures exact relationship counts across multi-doctor and shared facility nodes.
 
 ---
 
-# Problem Statement
-
-The project addresses two primary challenges.
-
-### 1. Natural-Language Understanding
-
-Users can express the same requirement in many different ways.
-
-For example:
-
-```text
-Show cardiologists in South District
-```
-
-and:
-
-```text
-Which heart specialists are available in South District?
-```
-
-may represent the same underlying request.
-
-The system therefore needs to identify:
-
-* User intent
-* Relevant entities
-* Specialty
-* Doctor name
-* Hospital
-* District or location
-
-### 2. LLM Reliability
-
-The application uses an external LLM for flexible language understanding. However, an LLM API can experience:
-
-* Rate limits
-* API errors
-* Invalid responses
-* JSON parsing failures
-* Temporary availability issues
-
-The application therefore uses a hybrid architecture where the LLM is **not the only mechanism for interpreting queries**.
+### 2. Multi-Hop Shortest-Path Hospital Referrals (Dijkstra / BFS)
+* When a requested specialty is not available at an origin facility (e.g. *"General physician at Metro Central Medical Center"*), the assistant traverses the weighted hospital connection network (`:CONNECTED_TO {distance_km}`) using Dijkstra's shortest-path algorithm.
+* Returns the closest reachable facility offering that specialty along with the exact road distance in kilometers (e.g., *6.2 km via Northfield Community Hospital*) and step-by-step path trace.
 
 ---
 
-# Solution
-
-The system uses three levels of intent processing:
-
-1. **Regex Fast Path** — handles common and predictable query patterns without an LLM call.
-2. **LLM Parsing** — handles queries that cannot be recognized by the deterministic parser.
-3. **Fuzzy Fallback** — provides a recovery mechanism when LLM processing fails.
-
-The resulting structured intent is passed to a controlled query-dispatch layer, which executes the appropriate Cypher query against Neo4j.
+### 3. Context-Aware Doctor Name Disambiguation Engine
+Handles duplicate doctor names across facilities and departments without probabilistic guessing:
+* **`same_hospital`** (e.g., *Dr. Aarav* -> Dr. Aarav Desai in Cardiology and Dr. Aarav Sharma in General Surgery, both at *Metro Central*):
+  * Clarification Prompt: *"Multiple doctors named 'Dr. Aarav' were found at Metro Central Medical Center. Which department and specialization are you looking for?"*
+* **`different_hospitals`** (e.g., *Dr. Sameer* -> *Oakridge Specialty Hospital* vs *Bayview General Hospital*):
+  * Clarification Prompt: *"Multiple doctors named 'Dr. Sameer' were found across different hospitals. Which hospital and specialization are you looking for?"*
+* **`mixed`** (e.g., *Dr. Vikram* -> 2 at *Apex Advanced* + 1 at *Riverdale General*):
+  * Clarification Prompt: *"Multiple doctors named 'Dr. Vikram' were found across multiple hospitals and departments. Which hospital, department, and specialization are you looking for?"*
+* Renders interactive candidate selection cards with **1-click clarification query buttons**.
 
 ---
 
-# System Architecture
+### 4. Specialty Mismatch Verification & Cross-Facility Hop
+* Checks if a practitioner is certified in an inquired field (e.g. *"Is Dr. Aarohi a Neurologist?"*).
+* Detects that Dr. Aarohi is certified in **Cardiology**, hops across the connected facility network from her hospital (*Apex Advanced*), and returns certified specialists in **Neurology**.
 
-```mermaid
-flowchart TD
+---
 
-    USER["User"]
+### 5. General Doctor Discovery by District
+* Supports broad geographic discovery queries (e.g. *"Doctors in North District"*, *"Find doctors in South District"*, *"Physicians in Downtown"*) returning all affiliated practitioners and departments across that district's hospitals.
 
-    subgraph FRONTEND["Frontend Layer"]
-        UI["Flask Web Application"]
-        HTML["HTML / CSS / JavaScript"]
-    end
+---
 
-    subgraph API["API Layer"]
-        FASTAPI["FastAPI"]
-        VALIDATE["Pydantic Validation"]
-    end
+### 6. Visual Onboarding & Tour Guide
+* **3D Knowledge Graph Hero Card**: Embedded directly on the start screen with real-time entity counters (**52 Doctors**, **20 Hospitals**, **15 Specialties**, **34 Departments**).
+* **Three Capability Pillars**: *Natural Discovery*, *Multi-Hop Referrals*, and *Smart Disambiguation*.
+* **Onboarding Tour Modal**: Accessible via the "Tour" button in the top navigation bar and sidebar.
 
-    subgraph NLP["Intent Understanding"]
-        UNDERSTAND["understand_question()"]
-        REGEX["fast_rule_parser()"]
-        LLM["Groq LLM<br/>openai/gpt-oss-120b"]
-        FALLBACK["fuzzy_graph_fallback()"]
-        INTENT["Structured Intent"]
-    end
+---
 
-    subgraph GRAPH["Graph Query Layer"]
-        DISPATCH["dispatch_intent()"]
-        QUERIES["Graph Query Functions"]
-        CYPHER["Controlled Cypher"]
-    end
+## System Architecture
 
-    subgraph DATABASE["Database Layer"]
-        DRIVER["Neo4j Driver"]
-        NEO4J[("Neo4j Healthcare Knowledge Graph")]
-    end
-
-    USER --> UI
-    UI --> HTML
-    HTML -->|POST /ask| FASTAPI
-
-    FASTAPI --> VALIDATE
-    VALIDATE --> UNDERSTAND
-
-    UNDERSTAND --> REGEX
-
-    REGEX -->|Match| INTENT
-    REGEX -->|No Match| LLM
-
-    LLM -->|Success| INTENT
-    LLM -->|Failure| FALLBACK
-    FALLBACK --> INTENT
-
-    INTENT --> DISPATCH
-    DISPATCH --> QUERIES
-    QUERIES --> CYPHER
-    CYPHER --> DRIVER
-    DRIVER --> NEO4J
-
-    NEO4J --> DRIVER
-    DRIVER --> QUERIES
-    QUERIES --> FASTAPI
-
-    FASTAPI -->|JSON Response| HTML
-    HTML --> UI
-    UI --> USER
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                   1. PRESENTATION LAYER (UI)                     │
+│  • Flask (Port 5000) & Jinja2 Template (frontend/templates)     │
+│  • D3.js Force-Directed Graph Visualizer (In-Chat)               │
+│  • 3D Hero Artwork, Live Metrics Strip & Disambiguation Cards    │
+└────────────────────────────────┬─────────────────────────────────┘
+                                 │ HTTP POST /ask (with Auto-Retry & Warmup)
+┌────────────────────────────────▼─────────────────────────────────┐
+│              2. ORCHESTRATION & NLP LAYER (API)                  │
+│  • FastAPI (Port 8001) in backend/main.py                        │
+│  • Hybrid Intent Classifier (Fast Rule Parser + LLM Fallback)   │
+│  • Subgraph Extraction & Disambiguation Engine                   │
+└────────────────────────────────┬─────────────────────────────────┘
+                                 │ Invokes Python query methods
+┌────────────────────────────────▼─────────────────────────────────┐
+│             3. GRAPH ALGORITHM & QUERY LAYER                     │
+│  • Parameterized Cypher Engine (app/graph_queries.py)            │
+│  • Dijkstra Shortest Path across :CONNECTED_TO network           │
+│  • Specialty Mismatch Verification & District Lookups            │
+└────────────────────────────────┬─────────────────────────────────┘
+                                 │ Bolt Protocol (neo4j://)
+┌────────────────────────────────▼─────────────────────────────────┐
+│               4. KNOWLEDGE GRAPH DATABASE (DATA)                 │
+│  • Neo4j AuraDB / Local Neo4j:                                   │
+│    52 Doctors, 20 Hospitals, 15 Specialties, 34 Departments,     │
+│    20 Services, 10 Locations                                     │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-# End-to-End Request Flow
+## Knowledge Graph Schema
 
-When the user submits a question, the request follows this pipeline:
+### Node Types
+| Label | Count | Properties |
+| :--- | :--- | :--- |
+| `(:Doctor)` | 52 | `doctor_id`, `name` |
+| `(:Hospital)` | 20 | `hospital_id`, `name`, `type`, `beds` |
+| `(:Speciality)` | 15 | `specialty_id`, `name` |
+| `(:Department)` | 34 | `department_id`, `name` |
+| `(:Location)` | 10 | `location_id`, `city`, `district`, `state` |
+| `(:Service)` | 20 | `service_id`, `name` |
 
-```mermaid
-sequenceDiagram
-
-    participant U as User
-    participant F as Flask UI
-    participant A as FastAPI
-    participant P as Intent Parser
-    participant D as Graph Dispatcher
-    participant N as Neo4j
-
-    U->>F: Enter natural-language question
-    F->>A: POST /ask
-    A->>P: understand_question(question)
-
-    P->>P: Run regex parser
-
-    alt Regex pattern matched
-        P-->>A: Structured intent
-    else No regex match
-        P->>P: Call Groq LLM
-
-        alt LLM succeeds
-            P-->>A: Structured intent
-        else LLM failure
-            P->>P: Run fuzzy fallback
-            P-->>A: Fallback intent
-        end
-    end
-
-    A->>D: dispatch_intent(intent)
-    D->>N: Execute Cypher query
-    N-->>D: Graph records
-    D-->>A: Formatted results
-    A-->>F: JSON response
-    F-->>U: Render results
-```
+### Relationships
+| Relationship | Path | Description |
+| :--- | :--- | :--- |
+| `:WORKS_AT` | `(Doctor) -> (Hospital)` | Connects a practitioner to their medical facility. |
+| `:HAS_SPECIALTY` | `(Doctor) -> (Speciality)` | Links a practitioner to their certified specialty. |
+| `:HAS_DEPARTMENT` | `(Hospital) -> (Department)` | Connects a hospital to its medical departments. |
+| `:OFFERS_SPECIALTY` | `(Department) -> (Speciality)` | Maps a clinical department to its specialty. |
+| `:OFFERS_SERVICE` | `(Hospital) -> (Service)` | Connects a facility to diagnostic equipment (ICU, MRI, etc.). |
+| `:LOCATED_IN` | `(Hospital) -> (Location)` | Maps a hospital to its city and parent district. |
+| `:CONNECTED_TO` | `(Hospital) -> (Hospital)` | Weighted road transfer network with `{distance_km: Float}`. |
 
 ---
 
-# Hybrid Intent Processing
+## Example Queries
 
-The hybrid parser is the central component of the application.
-
-## Stage 1: Regex Parser
-
-The system first checks whether the question matches one of the known query patterns.
-
-For example:
-
-```text
-Show cardiologists in South District
-```
-
-can be identified without an LLM request.
-
-The parser extracts the relevant information and produces an intent such as:
-
-```json
-{
-  "intent": "doctors_by_specialty",
-  "specialty": "Cardiology",
-  "district": "South District"
-}
-```
-
-This fast path provides:
-
-* Lower latency
-* No LLM token consumption
-* Predictable behavior
-* Reduced external API dependency
-
-## Stage 2: LLM Parsing
-
-If the regex parser cannot recognize the query, the application sends the question to Groq using:
-
-```text
-openai/gpt-oss-120b
-```
-
-The LLM is instructed to return a structured intent rather than directly querying Neo4j.
-
-For example:
-
-```json
-{
-  "intent": "doctor_by_name",
-  "doctor_name": "Dr Arohi"
-}
-```
-
-## Stage 3: Fuzzy Fallback
-
-If the LLM fails because of a rate limit, API error, invalid JSON, or another parsing problem, the application uses:
-
-```text
-fuzzy_graph_fallback()
-```
-
-The fallback normalizes the input and attempts more permissive pattern matching.
-
-If nothing can be identified, the system returns a valid:
-
-```json
-{
-  "intent": "unknown"
-}
-```
-
-rather than allowing an LLM exception to propagate through the application.
+| Category | Example Question | System Behavior |
+| :--- | :--- | :--- |
+| **Natural Discovery** | `Cardiologists in South District` | Returns 3 cardiologists across South District hospitals with full force graph. |
+| **Multi-Hop Referral** | `general physician at Metro Central Medical Center` | Traverses `:CONNECTED_TO` network to find `Dr. Amaya Desai` at Northfield Community Hospital (6.2 km away via 2 hops). |
+| **Name Collision** | `Dr Aarav` | Detects same-hospital duplicate and prompts for department & specialization. |
+| **Cross-Hospital Collision** | `Dr Sameer` | Detects multi-hospital duplicates and prompts for facility & specialization. |
+| **Specialty Check** | `Is Dr. Aarohi a Neurologist?` | Identifies Dr. Aarohi is in Cardiology, hops across connected network, and displays certified Neurologists. |
+| **District Doctors** | `Doctors in North District` | Returns all 19 practitioners across North District facilities. |
+| **Hospital Doctors** | `Show doctors at Apex Advanced Medical Center` | Returns all medical staff affiliated with Apex Advanced. |
 
 ---
 
-# Intent Processing Flow
+## Project Structure
 
-```mermaid
-flowchart TD
-
-    Q["Natural-Language Question"]
-
-    Q --> R["Regex Fast Parser"]
-
-    R -->|Recognized| I["Structured Intent"]
-
-    R -->|Not Recognized| L["Groq LLM"]
-
-    L -->|Valid Response| I
-
-    L -->|Rate Limit| F["Fuzzy Fallback"]
-    L -->|API Error| F
-    L -->|Invalid JSON| F
-    L -->|Unexpected Error| F
-
-    F -->|Pattern Found| I
-    F -->|No Pattern| U["Unknown Intent"]
-
-    I --> D["Intent Dispatcher"]
-    U --> D
-
-    D --> G["Graph Query"]
-    G --> N[("Neo4j")]
 ```
-
----
-
-# Knowledge Graph
-
-The healthcare information is represented as a graph of connected entities.
-
-The core entities include:
-
-* Doctor
-* Specialty
-* Hospital
-* Location
-* Department
-* Service
-
-A simplified relationship model is:
-
-```mermaid
-graph LR
-
-    D["Doctor"]
-    S["Specialty"]
-    H["Hospital"]
-    L["Location"]
-
-    D -->|HAS_SPECIALTY| S
-    D -->|WORKS_AT| H
-    H -->|LOCATED_IN| L
-```
-
-The graph model allows the application to traverse relationships instead of treating doctors, hospitals, and locations as isolated records.
-
-For example:
-
-```text
-Doctor
-   │
-   ├── HAS_SPECIALTY ──> Cardiology
-   │
-   └── WORKS_AT ──────> City Hospital
-                              │
-                              └── LOCATED_IN ──> South District
-```
-
----
-
-# Intent-to-Query Dispatch
-
-The application does not allow the LLM to directly execute arbitrary database operations.
-
-Instead, the structured intent is passed to:
-
-```text
-dispatch_intent()
-```
-
-The dispatcher selects the appropriate application-controlled graph query.
-
-```mermaid
-flowchart TD
-
-    I["Structured Intent"]
-
-    I --> D{"Intent Dispatcher"}
-
-    D -->|doctors_by_specialty| Q1["query_doctors_by_specialty_and_district()"]
-    D -->|doctors_by_hospital| Q2["query_doctors_by_hospital()"]
-    D -->|doctor_by_name| Q3["query_doctor_by_name()"]
-    D -->|hospitals_by_district| Q4["query_hospitals_by_district()"]
-
-    Q1 --> C["Controlled Cypher"]
-    Q2 --> C
-    Q3 --> C
-    Q4 --> C
-
-    C --> N[("Neo4j")]
-```
-
-This separation provides better control over the database layer and prevents natural-language input from becoming unrestricted database execution.
-
----
-
-# Example Query
-
-### User
-
-```text
-Show cardiologists in South District
-```
-
-### Intent
-
-```json
-{
-  "intent": "doctors_by_specialty",
-  "specialty": "Cardiology",
-  "district": "South District"
-}
-```
-
-### Dispatcher
-
-```text
-doctors_by_specialty
-        ↓
-query_doctors_by_specialty_and_district()
-```
-
-### Database
-
-```text
-Structured Intent
-        ↓
-Controlled Cypher
-        ↓
-Neo4j
-        ↓
-Matching records
-```
-
-### Response
-
-The resulting records are converted into JSON and returned to the frontend.
-
-The UI can then display information such as:
-
-```text
-Doctor Name
-Specialty
-Hospital
-Location
-```
-
----
-
-# Project Structure
-
-```text
-KG-usecase/
-│
 ├── app/
-│   ├── __init__.py
-│   ├── database.py
-│   ├── graph_queries.py
-│   ├── load_data.py
-│   └── test_suite.py
-│
+│   ├── database.py         # Neo4j connection pooling & credentials
+│   ├── load_data.py        # CSV ingestion & graph schema generation
+│   └── graph_queries.py    # Parameterized Cypher queries & shortest-path logic
 ├── backend/
-│   ├── llm.py
-│   └── main.py
-│
-├── data/
-│   ├── departments.csv
-│   ├── doctors.csv
-│   ├── hospital_connections.csv
-│   ├── hospitals.csv
-│   ├── locations.csv
-│   ├── services.csv
-│   └── specialities.csv
-│
+│   ├── main.py             # FastAPI REST server, disambiguation & subgraph builder
+│   └── llm.py              # Hybrid Intent Parser (Fast Regex + LLM fallback)
 ├── frontend/
-│   ├── app.py
-│   ├── static/
-│   │   └── style.css
-│   └── templates/
-│       └── index.html
-│
-├── graph/
-├── README.md
-├── requirements.txt
-└── .gitignore
-```
-
-The `graph/` directory is reserved for graph-related resources. Empty directories are not tracked by Git.
-
----
-
-# Component Responsibilities
-
-| Component                       | Responsibility                              |
-| ------------------------------- | ------------------------------------------- |
-| `backend/main.py`               | FastAPI application and `/ask` endpoint     |
-| `backend/llm.py`                | Regex parsing, LLM parsing, fallback logic  |
-| `app/graph_queries.py`          | Intent dispatch and Cypher query functions  |
-| `app/database.py`               | Neo4j driver and database connectivity      |
-| `app/load_data.py`              | Loading healthcare data into Neo4j          |
-| `frontend/app.py`               | Flask web application and API communication |
-| `frontend/templates/index.html` | Main user interface                         |
-| `frontend/static/style.css`     | UI styling and visual design                |
-| `app/test_suite.py`             | Automated application and integration tests |
-| `data/`                         | Healthcare CSV datasets                     |
-
----
-
-# Frontend
-
-The frontend is implemented using Flask with HTML, CSS, and JavaScript.
-
-The interface provides:
-
-* Natural-language query input
-* Search interaction
-* New Search functionality
-* Dark-mode toggle
-* Doctor result cards
-* Hospital result tables
-* API-driven result rendering
-
-The frontend communicates with the FastAPI backend rather than accessing Neo4j directly.
-
-```mermaid
-flowchart LR
-
-    U["User"]
-    UI["HTML / CSS / JavaScript"]
-    F["Flask"]
-    A["FastAPI"]
-    R["JSON Response"]
-    D["Rendered Results"]
-
-    U --> UI
-    UI --> F
-    F -->|HTTP Request| A
-    A -->|JSON| R
-    R --> F
-    F --> UI
-    UI --> D
+│   ├── app.py              # Flask server, auto-retry & background warmup proxy
+│   ├── templates/index.html# SPA interface with D3 force graph visualizer & hero UI
+│   └── static/
+│       ├── style.css       # Glassmorphic design system & D3 visualizer styles
+│       └── onboarding_hero.jpg # 3D Healthcare Knowledge Graph artwork asset
+├── data/                   # Healthcare domain CSV datasets
+│   ├── doctors.csv
+│   ├── hospitals.csv
+│   ├── specialities.csv
+│   ├── departments.csv
+│   ├── locations.csv
+│   ├── hospital_connections.csv
+│   └── services.csv
+└── requirements.txt
 ```
 
 ---
 
-# API
+## Installation & Setup
 
-The primary backend endpoint is:
+### 1. Prerequisites
+* Python 3.10+
+* Neo4j AuraDB instance or local Neo4j Desktop
+* Groq API Key (or OpenAI API Key)
 
-```text
-POST /ask
+### 2. Environment Configuration
+Create a `.env` file in the root directory:
+
+```env
+# Neo4j Database
+NEO4J_URI=neo4j+s://<your-aura-instance-id>.databases.neo4j.io
+NEO4J_USERNAME=neo4j
+NEO4J_PASSWORD=<your-neo4j-password>
+
+# LLM API
+GROQ_API_KEY=<your-groq-api-key>
+
+# Backend Service URL (for Frontend Proxy)
+FASTAPI_URL=http://127.0.0.1:8001
 ```
 
-### Request
-
-```json
-{
-  "question": "Show cardiologists in South District"
-}
-```
-
-### Processing
-
-```text
-POST /ask
-    ↓
-Request Validation
-    ↓
-Intent Understanding
-    ↓
-Intent Dispatch
-    ↓
-Cypher Query
-    ↓
-Neo4j
-    ↓
-Result Formatting
-    ↓
-JSON Response
-```
-
-FastAPI and Pydantic provide structured request validation before the request reaches the application logic.
-
----
-
-# Reliability and Fallback Strategy
-
-The architecture avoids making the LLM a single point of failure.
-
-```mermaid
-flowchart TD
-
-    Q["Incoming Query"]
-
-    Q --> R["Regex Fast Path"]
-
-    R -->|Match| I["Intent"]
-    R -->|No Match| L["LLM"]
-
-    L -->|Success| I
-    L -->|Failure| F["Fuzzy Fallback"]
-
-    F -->|Recognized| I
-    F -->|Not Recognized| U["Unknown Intent"]
-
-    I --> G["Graph Query"]
-    U --> G
-
-    G --> N[("Neo4j")]
-    N --> O["Application Response"]
-```
-
-The fallback protects the **intent-understanding stage** from common LLM failures.
-
-It does not eliminate failures from infrastructure dependencies such as an unavailable Neo4j database.
-
----
-
-# Security Considerations
-
-The application separates:
-
-```text
-User Input
-     ↓
-Intent Extraction
-     ↓
-Controlled Intent
-     ↓
-Predefined Query Logic
-     ↓
-Neo4j
-```
-
-The LLM is used for language interpretation rather than unrestricted database execution.
-
-The test suite also includes checks for:
-
-* Injection-style inputs
-* XSS-style inputs
-* Path traversal
-* Large payloads
-* Invalid request structures
-* Unexpected parser responses
-
----
-
-# Testing
-
-The project includes an automated test suite covering multiple layers of the application.
-
-| Category          | Coverage                                            |
-| ----------------- | --------------------------------------------------- |
-| Neo4j Integrity   | Nodes, relationships, and graph consistency         |
-| Graph Queries     | Specialty, district, hospital, and related queries  |
-| Intent Extraction | Regex, LLM, and fallback behavior                   |
-| FastAPI           | Endpoint and payload validation                     |
-| Flask Proxy       | Frontend-to-backend request flow                    |
-| Security          | Injection, XSS, path traversal, and malformed input |
-| Edge Cases        | Invalid and unexpected requests                     |
-| Concurrency       | Multiple simultaneous queries                       |
-
-Latest reported test execution:
-
-```text
-48 tests passed
-100% success
-```
-
----
-
-# Technology Stack
-
-| Technology              | Purpose                            |
-| ----------------------- | ---------------------------------- |
-| Python                  | Core application                   |
-| Neo4j                   | Knowledge graph database           |
-| Cypher                  | Graph querying                     |
-| FastAPI                 | REST API                           |
-| Flask                   | Web frontend                       |
-| Groq                    | LLM inference                      |
-| GPT-OSS-120B            | Natural-language intent extraction |
-| Pydantic                | Request validation                 |
-| HTML / CSS / JavaScript | User interface                     |
-
----
-
-# Setup
-
-Clone the repository:
-
+### 3. Install Dependencies
 ```bash
-git clone https://github.com/sydelendure/healthcare-knowledge-graph-assistant.git
-cd healthcare-knowledge-graph-assistant
-```
-
-Create a virtual environment:
-
-```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
-```
-
-Install dependencies:
-
-```bash
 pip install -r requirements.txt
 ```
 
-Configure the required environment variables in `.env`:
-
-```text
-GROQ_API_KEY=your_groq_api_key
-NEO4J_URI=your_neo4j_uri
-NEO4J_USERNAME=your_neo4j_username
-NEO4J_PASSWORD=your_neo4j_password
+### 4. Ingest Data into Neo4j
+```bash
+python3 app/load_data.py
 ```
 
-The `.env` file is excluded from version control through `.gitignore`.
+### 5. Run the Application
+In separate terminal tabs:
 
-Load the healthcare dataset into Neo4j using the project's data-loading functionality, then start the backend and frontend services according to the application configuration.
-
----
-
-# Example Queries
-
-The application is designed to support questions such as:
-
-```text
-Show cardiologists in South District
-
-Tell me about Dr Arohi
-
-Which doctors work at City Hospital?
-
-Show hospitals in South District
-
-Find doctors in North District
+**Start FastAPI Backend (Port 8001):**
+```bash
+uvicorn backend.main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
-The exact supported intents depend on the query handlers implemented in the current version.
-
----
-
-# Design Principles
-
-The project follows several key design principles:
-
-### Separation of Concerns
-
-Frontend, API, intent understanding, graph queries, and database connectivity are implemented as separate layers.
-
-### Hybrid Processing
-
-Deterministic rules handle common patterns while the LLM provides semantic flexibility.
-
-### Controlled Database Access
-
-Natural-language interpretation is separated from Cypher execution.
-
-### Graceful Degradation
-
-LLM failures trigger a fallback mechanism instead of automatically failing the complete request.
-
-### Structured Data Retrieval
-
-Neo4j provides relationship-aware querying over the healthcare domain.
-
----
-
-# Future Enhancements
-
-Potential extensions include:
-
-* Additional healthcare query intents
-* More advanced entity recognition
-* Semantic entity matching
-* Doctor availability information
-* Appointment-related functionality
-* Graph-based recommendations
-* Query caching
-* Authentication and authorization
-* API rate limiting
-* Structured logging and monitoring
-* CI/CD using GitHub Actions
-* Expanded load and stress testing
-
----
-
-# Overall Flow
-
-The complete application can be summarized as:
-
-```mermaid
-flowchart LR
-
-    A["Natural-Language Question"]
-    B["Intent Understanding"]
-    C["Structured Intent"]
-    D["Intent Dispatcher"]
-    E["Controlled Cypher"]
-    F[("Neo4j Knowledge Graph")]
-    G["Structured Results"]
-    H["Web Interface"]
-
-    A --> B
-    B --> C
-    C --> D
-    D --> E
-    E --> F
-    F --> G
-    G --> H
+**Start Flask Frontend (Port 5000):**
+```bash
+python3 frontend/app.py
 ```
 
-The resulting architecture combines **natural-language interaction, deterministic parsing, LLM-based semantic understanding, controlled graph querying, and a Neo4j knowledge graph** into a single healthcare information assistant.
+Open your browser at **`http://127.0.0.1:5000`**.
+
+---
+
+## Deployment on Render
+
+1. **Backend Web Service**:
+   * Build Command: `pip install -r requirements.txt`
+   * Start Command: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
+   * Environment Variables: `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`, `GROQ_API_KEY`
+2. **Frontend Web Service**:
+   * Build Command: `pip install -r requirements.txt`
+   * Start Command: `python frontend/app.py`
+   * Environment Variables: `FASTAPI_URL=https://<your-backend-service>.onrender.com`
+   * *Note*: The frontend proxy includes an **automatic retry loop** and a **background pre-warm endpoint** (`/warmup`) to handle Render free-tier cold starts.
