@@ -236,6 +236,41 @@ def get_doctors_by_specialty(specialty):
             )
 
             return [record.data() for record in result]
+    finally:
+        db.close()
+
+
+def get_doctors_by_district(district):
+    query = """
+    MATCH (d:Doctor)-[:WORKS_AT]->(h:Hospital)-[:LOCATED_IN]->(l:Location),
+          (d)-[:HAS_SPECIALTY]->(s:Speciality)
+    WHERE toLower(l.district) = toLower($district)
+       OR toLower(l.city) = toLower($district)
+       OR toLower(l.district) CONTAINS toLower($district)
+       OR toLower($district) CONTAINS toLower(l.district)
+    OPTIONAL MATCH (h)-[:HAS_DEPARTMENT]->(dep:Department)-[:OFFERS_SPECIALTY]->(s)
+    RETURN
+        d.doctor_id AS doctor_id,
+        d.name AS doctor,
+        s.name AS specialization,
+        coalesce(dep.name, s.name) AS department,
+        h.hospital_id AS hospital_id,
+        h.name AS hospital,
+        l.city AS city,
+        l.district AS district
+    ORDER BY d.name
+    """
+
+    db = Neo4jDatabase()
+
+    try:
+        with db.driver.session() as session:
+            result = session.run(
+                query,
+                district=district
+            )
+
+            return [record.data() for record in result]
 
     finally:
         db.close()

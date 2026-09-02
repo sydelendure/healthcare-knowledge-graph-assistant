@@ -1,9 +1,9 @@
 hospital_id,name,type,location_id,beds
 H001,Metro Central Medical Center,Government,L001,500
-H002,North District Specialty Hospital,Private,L002,250
+H002,Minesotta Specialty Hospital,Private,L002,250
 H003,Riverdale General Hospital,Government,L003,300
 H004,Bayview Healthcare Center,Private,L004,200
-H005,South District Medical Center,Government,L005,450
+H005,Bridge Candy Medical Center,Government,L005,450
 H006,Oakridge Specialty Hospital,Private,L005,300
 H007,Highland Community Hospital,Government,L006,150
 H008,Pinecrest Medical Institute,Private,L007,350

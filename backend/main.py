@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from app.graph_queries import (
     find_doctors_with_graph_hopping,
     get_doctors_by_specialty,
+    get_doctors_by_district,
     get_doctors_by_hospital,
     get_hospitals_by_district,
     get_all_hospitals,
@@ -432,6 +433,14 @@ def ask_question(request: QuestionRequest):
         specialty = intent_data.get("specialty")
         if specialty:
             results = get_doctors_by_specialty(specialty)
+        else:
+            results = []
+
+    elif intent == "doctors_by_district":
+
+        district = intent_data.get("district")
+        if district:
+            results = get_doctors_by_district(district)
         else:
             results = []
 

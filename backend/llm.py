@@ -257,7 +257,16 @@ def fast_rule_parser(q: str):
             'specialty': spec
         }
 
-    # 3. Hospitals & non-specialty queries
+    # 3. Doctors by District / Location without explicit single specialty
+    if any(w in q_low for w in ['doctor', 'doctors', 'physician', 'physicians', 'practitioner', 'practitioners', 'specialist', 'specialists']):
+        if 'north' in q_low:
+            return {'intent': 'doctors_by_district', 'district': 'North District'}
+        if 'south' in q_low:
+            return {'intent': 'doctors_by_district', 'district': 'South District'}
+        if 'downtown' in q_low:
+            return {'intent': 'doctors_by_district', 'district': 'Downtown'}
+
+    # 4. Hospitals & non-specialty queries
     if 'hospital' in q_low or 'medical center' in q_low or 'facilities' in q_low:
         if ('doctor' in q_low or 'practitioner' in q_low or 'physician' in q_low or 'working' in q_low) and ' at ' in q_low:
             h_name = q_low.split(' at ')[-1].strip().title()
@@ -333,7 +342,12 @@ def fuzzy_graph_fallback(question: str):
     if spec:
         return {"intent": "doctors_by_specialty", "specialty": spec}
 
-    # 4. Check hospitals
+    # 4. Check general doctors by district
+    if any(w in q_low for w in ['doctor', 'doctors', 'physician', 'physicians', 'practitioner', 'practitioners', 'specialist', 'specialists']):
+        if dist:
+            return {"intent": "doctors_by_district", "district": dist}
+
+    # 5. Check hospitals
     if "hospital" in q_low or "medical center" in q_low:
         if dist:
             return {"intent": "hospitals_by_district", "district": dist}
