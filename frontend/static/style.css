@@ -137,15 +137,31 @@ html, body {
 }
 
 .brand-symbol {
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     border-radius: var(--radius-md);
-    background: var(--primary-green);
-    color: #ffffff;
+    background: #090e0c;
+    border: 1px solid var(--primary-green-border);
+    box-shadow: 0 0 10px rgba(34, 197, 94, 0.3);
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
     flex-shrink: 0;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.brand:hover .brand-symbol {
+    transform: scale(1.05);
+    box-shadow: 0 0 14px rgba(34, 197, 94, 0.45);
+}
+
+.brand-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    filter: brightness(1.05) contrast(1.1);
 }
 
 .brand-text {
