@@ -142,6 +142,145 @@ def closest_hospitals(
     }
 
 
+def build_subgraph_from_results(
+    intent: str,
+    results: list,
+    graph_hop_info: dict = None,
+    disambiguation: bool = False,
+    candidates: list = None
+) -> dict:
+    nodes = []
+    links = []
+    node_ids = set()
+
+    def add_node(node_id, label, node_type, color, radius=13, properties=None):
+        if not node_id or node_id in node_ids:
+            return
+        node_ids.add(node_id)
+        nodes.append({
+            "id": str(node_id),
+            "label": str(label),
+            "type": node_type,
+            "color": color,
+            "radius": radius,
+            "properties": properties or {}
+        })
+
+    def add_link(source_id, target_id, label, properties=None):
+        if not source_id or not target_id or source_id == target_id:
+            return
+        links.append({
+            "source": str(source_id),
+            "target": str(target_id),
+            "label": label,
+            "properties": properties or {}
+        })
+
+    items = candidates if (disambiguation and candidates) else (results or [])
+
+    # Process items (Doctors, Hospitals, Specialties, Departments, Locations)
+    for idx, item in enumerate(items):
+        doc_name = item.get("doctor") or item.get("name")
+        doc_id = item.get("doctor_id") or (f"doc_{doc_name}_{idx}" if doc_name else None)
+        hosp_name = item.get("hospital")
+        hosp_id = item.get("hospital_id") or (f"hosp_{hosp_name}" if hosp_name else None)
+        spec_name = item.get("specialization") or item.get("actual_specialty")
+        spec_id = f"spec_{spec_name}" if spec_name else None
+        dept_name = item.get("department")
+        dept_id = f"dept_{dept_name}" if dept_name else None
+        district = item.get("district")
+        city = item.get("city")
+        loc_label = district or city
+        loc_id = f"loc_{loc_label}" if loc_label else None
+
+        if doc_name and doc_id:
+            add_node(doc_id, doc_name, "Doctor", "#10b981", 15, {
+                "Doctor": doc_name,
+                "Specialization": spec_name or "General",
+                "Hospital": hosp_name or "Affiliated Facility",
+                "Department": dept_name or "Clinical"
+            })
+
+        if hosp_name and hosp_id:
+            add_node(hosp_id, hosp_name, "Hospital", "#06b6d4", 17, {
+                "Hospital": hosp_name,
+                "District": district or "District Area",
+                "City": city or ""
+            })
+
+        if spec_name and spec_id:
+            add_node(spec_id, spec_name, "Speciality", "#8b5cf6", 14, {
+                "Specialty": spec_name
+            })
+
+        if dept_name and dept_id:
+            add_node(dept_id, dept_name, "Department", "#f59e0b", 13, {
+                "Department": dept_name
+            })
+
+        if loc_label and loc_id:
+            add_node(loc_id, loc_label, "Location", "#3b82f6", 14, {
+                "Location": loc_label
+            })
+
+        # Add relationships
+        if doc_id and hosp_id:
+            add_link(doc_id, hosp_id, "WORKS_AT")
+        if doc_id and spec_id:
+            add_link(doc_id, spec_id, "HAS_SPECIALTY")
+        if hosp_id and dept_id:
+            add_link(hosp_id, dept_id, "HAS_DEPARTMENT")
+        if dept_id and spec_id:
+            add_link(dept_id, spec_id, "OFFERS_SPECIALTY")
+        if hosp_id and loc_id:
+            add_link(hosp_id, loc_id, "LOCATED_IN")
+
+    # Handle Multi-Hop Traversal Paths
+    if graph_hop_info and graph_hop_info.get("graph_hopped"):
+        origin_name = graph_hop_info.get("hop_origin")
+        target_name = graph_hop_info.get("hop_target")
+        traversal_path = graph_hop_info.get("traversal_path") or []
+        step_distances = graph_hop_info.get("step_distances") or []
+
+        if origin_name:
+            origin_id = f"hosp_{origin_name}"
+            add_node(origin_id, origin_name, "Hospital", "#f43f5e", 18, {
+                "Role": "Origin Facility (Lacks Specialty)",
+                "Hospital": origin_name
+            })
+
+        if len(traversal_path) >= 2:
+            for i in range(len(traversal_path) - 1):
+                n1 = traversal_path[i]
+                n2 = traversal_path[i + 1]
+                id1 = f"hosp_{n1}"
+                id2 = f"hosp_{n2}"
+                add_node(id1, n1, "Hospital", "#06b6d4", 15, {"Hospital": n1})
+                add_node(id2, n2, "Hospital", "#06b6d4" if i + 1 < len(traversal_path) - 1 else "#10b981", 17, {"Hospital": n2})
+                dist_km = step_distances[i] if i < len(step_distances) else None
+                label = f"{dist_km} km" if dist_km else "CONNECTED_TO"
+                add_link(id1, id2, "CONNECTED_TO", {
+                    "distance_km": dist_km,
+                    "highlighted": True,
+                    "hop_step": i + 1,
+                    "label": label
+                })
+        elif origin_name and target_name:
+            origin_id = f"hosp_{origin_name}"
+            target_id = f"hosp_{target_name}"
+            add_link(origin_id, target_id, "CONNECTED_TO", {
+                "distance_km": graph_hop_info.get("total_distance_km"),
+                "highlighted": True
+            })
+
+    return {
+        "nodes": nodes,
+        "links": links,
+        "node_count": len(nodes),
+        "link_count": len(links)
+    }
+
+
 def create_disambiguation_payload(
     question: str,
     doctor_name: str,
@@ -198,6 +337,13 @@ def create_disambiguation_payload(
             "Which hospital, department, and specialization are you looking for?"
         )
 
+    subgraph = build_subgraph_from_results(
+        intent="doctor_disambiguation",
+        results=results,
+        disambiguation=True,
+        candidates=cand_list
+    )
+
     return {
         "question": question,
         "intent": "doctor_disambiguation",
@@ -210,7 +356,8 @@ def create_disambiguation_payload(
         "message": clarification_prompt,
         "candidates": cand_list,
         "count": len(results),
-        "results": results
+        "results": results,
+        "subgraph": subgraph
     }
 
 
@@ -381,12 +528,20 @@ def ask_question(request: QuestionRequest):
             )
         }
 
-    # Step 3: Return the graph results
+    # Step 3: Return the graph results with interactive subgraph
+    subgraph = build_subgraph_from_results(
+        intent=intent,
+        results=results,
+        graph_hop_info=graph_hop_info,
+        disambiguation=False
+    )
+
     response_payload = {
         "question": question,
         "intent": intent,
         "count": len(results),
-        "results": results
+        "results": results,
+        "subgraph": subgraph
     }
     if graph_hop_info:
         response_payload.update(graph_hop_info)

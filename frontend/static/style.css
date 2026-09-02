@@ -1856,3 +1856,247 @@ html, body {
         justify-content: center;
     }
 }
+
+/* =========================================================
+   INTERACTIVE SUBGRAPH VISUALIZER (FORCE-DIRECTED GRAPH)
+   ========================================================= */
+
+.subgraph-visualizer-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin: 12px 0 16px 0;
+    box-shadow: 0 4px 16px var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s ease;
+}
+
+.subgraph-visualizer-card.expanded {
+    border-color: var(--primary-green);
+    box-shadow: 0 6px 24px rgba(16, 185, 129, 0.2);
+}
+
+.subgraph-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--bg-surface-hover);
+    border-bottom: 1px solid var(--border-subtle);
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.subgraph-title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.subgraph-pulse-ring {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--primary-green);
+    box-shadow: 0 0 0 3px var(--primary-green-glow);
+    animation: pulseGlow 2s infinite ease-in-out;
+}
+
+@keyframes pulseGlow {
+    0%, 100% { transform: scale(1); opacity: 0.9; }
+    50% { transform: scale(1.25); opacity: 0.4; }
+}
+
+.subgraph-title {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text-main);
+    letter-spacing: 0.01em;
+}
+
+.subgraph-counts-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    background: var(--primary-green-light);
+    color: var(--primary-green);
+    border: 1px solid var(--primary-green-border);
+}
+
+.subgraph-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.subgraph-tool-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.subgraph-tool-btn:hover {
+    border-color: var(--primary-green);
+    color: var(--primary-green);
+    background: var(--primary-green-light);
+}
+
+.subgraph-legend {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border-subtle);
+    overflow-x: auto;
+    font-size: 11px;
+}
+
+.legend-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--text-muted);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.subgraph-stage {
+    width: 100%;
+    height: 280px;
+    background: #090e0c;
+    position: relative;
+    overflow: hidden;
+    cursor: grab;
+    transition: height 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.subgraph-visualizer-card.expanded .subgraph-stage {
+    height: 460px;
+}
+
+.subgraph-stage:active {
+    cursor: grabbing;
+}
+
+.subgraph-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.subgraph-node {
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+.node-glow {
+    filter: blur(2px);
+}
+
+.subgraph-node:hover .node-circle {
+    stroke: #38bdf8;
+    stroke-width: 2.5px;
+    filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.6));
+}
+
+.subgraph-node-label {
+    font-size: 10.5px;
+    font-weight: 600;
+    fill: #f1f5f9;
+    pointer-events: none;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 6px rgba(0, 0, 0, 0.8);
+}
+
+.subgraph-link-text {
+    font-size: 9.5px;
+    font-weight: 600;
+    fill: #94a3b8;
+    pointer-events: none;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+.subgraph-footer-hint {
+    padding: 6px 14px;
+    background: var(--bg-surface-hover);
+    border-top: 1px solid var(--border-subtle);
+    font-size: 11px;
+    color: var(--text-light);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Floating Tooltip */
+.subgraph-floating-tooltip {
+    position: absolute;
+    pointer-events: none;
+    z-index: 1000;
+    background: rgba(15, 23, 42, 0.94);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #f8fafc;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(8px);
+    max-width: 280px;
+    font-size: 11.5px;
+}
+
+.tooltip-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 4px;
+}
+
+.tooltip-badge {
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: #ffffff;
+    text-transform: uppercase;
+}
+
+.tooltip-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.tooltip-prop {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.prop-k {
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.prop-v {
+    color: #f1f5f9;
+    font-weight: 600;
+}

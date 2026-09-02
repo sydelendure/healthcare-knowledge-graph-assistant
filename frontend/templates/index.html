@@ -11,6 +11,8 @@
         href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- D3.js for Interactive Knowledge Graph Visualizer -->
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
 </head>
 
 <body>
@@ -1229,6 +1231,53 @@
                 });
             }
 
+            // Interactive Subgraph Visualizer (Force-Directed Graph)
+            let subgraphHtml = "";
+            let subgraphId = null;
+            if (data.subgraph && data.subgraph.nodes && data.subgraph.nodes.length >= 2) {
+                subgraphId = "kg_subgraph_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+                const nodeCount = data.subgraph.node_count || data.subgraph.nodes.length;
+                const linkCount = data.subgraph.link_count || data.subgraph.links.length;
+
+                subgraphHtml = `
+                    <div class="subgraph-visualizer-card" id="${subgraphId}_card">
+                        <div class="subgraph-header">
+                            <div class="subgraph-title-group">
+                                <span class="subgraph-pulse-ring"></span>
+                                <span class="subgraph-title">Knowledge Graph Traversal Network</span>
+                                <span class="subgraph-counts-badge">${nodeCount} Nodes &bull; ${linkCount} Relations</span>
+                            </div>
+                            <div class="subgraph-toolbar">
+                                <button class="subgraph-tool-btn" onclick="zoomSubgraph('${subgraphId}', 1.25)" title="Zoom In" aria-label="Zoom In">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                                </button>
+                                <button class="subgraph-tool-btn" onclick="zoomSubgraph('${subgraphId}', 0.75)" title="Zoom Out" aria-label="Zoom Out">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                                </button>
+                                <button class="subgraph-tool-btn" onclick="resetSubgraph('${subgraphId}')" title="Reset Center View" aria-label="Reset Center View">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                                </button>
+                                <button class="subgraph-tool-btn" onclick="toggleSubgraphExpand('${subgraphId}_card')" title="Toggle Full Width" aria-label="Toggle Full Width">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="subgraph-legend">
+                            <span class="legend-pill"><span class="legend-dot" style="background:#10b981;"></span>Doctor</span>
+                            <span class="legend-pill"><span class="legend-dot" style="background:#06b6d4;"></span>Hospital</span>
+                            <span class="legend-pill"><span class="legend-dot" style="background:#8b5cf6;"></span>Specialty</span>
+                            <span class="legend-pill"><span class="legend-dot" style="background:#f59e0b;"></span>Department</span>
+                            <span class="legend-pill"><span class="legend-dot" style="background:#3b82f6;"></span>Location</span>
+                            ${data.graph_hopped ? `<span class="legend-pill"><span class="legend-dot" style="background:#f43f5e;"></span>Origin</span>` : ''}
+                        </div>
+                        <div class="subgraph-stage" id="${subgraphId}"></div>
+                        <div class="subgraph-footer-hint">
+                            <span>Drag nodes to reposition. Hover or click nodes to inspect graph relationships.</span>
+                        </div>
+                    </div>
+                `;
+            }
+
             row.innerHTML = `
                 <div class="assistant-content">
                     <div class="assistant-label">
@@ -1241,6 +1290,7 @@
                     <div class="conversational-lead">
                         ${leadText}
                     </div>
+                    ${subgraphHtml}
                     <div class="cards-list">
                         ${cardsHtml}
                     </div>
@@ -1249,6 +1299,251 @@
 
             messages.appendChild(row);
             scrollToBottom();
+
+            if (subgraphId && data.subgraph) {
+                setTimeout(() => {
+                    initD3ForceGraph(subgraphId, data.subgraph);
+                }, 40);
+            }
+        }
+
+        // D3 Force-Directed Subgraph Simulations Store
+        const activeGraphSimulations = {};
+
+        function initD3ForceGraph(containerId, graphData) {
+            if (typeof d3 === "undefined") {
+                console.warn("D3 library not loaded.");
+                return;
+            }
+
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            container.innerHTML = "";
+
+            const width = container.clientWidth || 640;
+            const height = 280;
+
+            const nodes = graphData.nodes.map(d => Object.assign({}, d));
+            const links = graphData.links.map(d => Object.assign({}, d));
+
+            const svg = d3.select(container)
+                .append("svg")
+                .attr("width", "100%")
+                .attr("height", height)
+                .attr("viewBox", [0, 0, width, height])
+                .attr("class", "subgraph-svg");
+
+            const defs = svg.append("defs");
+
+            defs.append("marker")
+                .attr("id", `${containerId}_arrow`)
+                .attr("viewBox", "0 -5 10 10")
+                .attr("refX", 22)
+                .attr("refY", 0)
+                .attr("markerWidth", 6)
+                .attr("markerHeight", 6)
+                .attr("orient", "auto")
+                .append("path")
+                .attr("d", "M0,-5L10,0L0,5")
+                .attr("fill", "var(--border-strong, #64748b)");
+
+            defs.append("marker")
+                .attr("id", `${containerId}_arrow_highlight`)
+                .attr("viewBox", "0 -5 10 10")
+                .attr("refX", 24)
+                .attr("refY", 0)
+                .attr("markerWidth", 7)
+                .attr("markerHeight", 7)
+                .attr("orient", "auto")
+                .append("path")
+                .attr("d", "M0,-5L10,0L0,5")
+                .attr("fill", "#06b6d4");
+
+            const g = svg.append("g").attr("class", "subgraph-zoom-group");
+
+            const zoom = d3.zoom()
+                .scaleExtent([0.35, 3.5])
+                .on("zoom", (event) => {
+                    g.attr("transform", event.transform);
+                });
+
+            svg.call(zoom);
+            activeGraphSimulations[containerId] = { svg, zoom, width, height };
+
+            const simulation = d3.forceSimulation(nodes)
+                .force("link", d3.forceLink(links).id(d => d.id).distance(d => d.properties && d.properties.highlighted ? 120 : 90))
+                .force("charge", d3.forceManyBody().strength(-280))
+                .force("center", d3.forceCenter(width / 2, height / 2))
+                .force("collide", d3.forceCollide().radius(d => (d.radius || 14) + 16));
+
+            const link = g.append("g")
+                .attr("class", "subgraph-links")
+                .selectAll("line")
+                .data(links)
+                .join("line")
+                .attr("stroke", d => d.properties && d.properties.highlighted ? "#06b6d4" : "var(--border-strong, #475569)")
+                .attr("stroke-width", d => d.properties && d.properties.highlighted ? 2.5 : 1.4)
+                .attr("stroke-dasharray", d => d.properties && d.properties.highlighted ? "5,3" : "none")
+                .attr("marker-end", d => d.properties && d.properties.highlighted ? `url(#${containerId}_arrow_highlight)` : `url(#${containerId}_arrow)`);
+
+            const linkLabel = g.append("g")
+                .attr("class", "subgraph-link-labels")
+                .selectAll("text")
+                .data(links)
+                .join("text")
+                .attr("class", "subgraph-link-text")
+                .attr("text-anchor", "middle")
+                .attr("dy", -4)
+                .text(d => d.properties && d.properties.label ? d.properties.label : d.label);
+
+            const node = g.append("g")
+                .attr("class", "subgraph-nodes")
+                .selectAll("g")
+                .data(nodes)
+                .join("g")
+                .attr("class", "subgraph-node")
+                .call(d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended));
+
+            node.append("circle")
+                .attr("r", d => (d.radius || 13) + 4)
+                .attr("fill", d => d.color || "#10b981")
+                .attr("opacity", 0.18)
+                .attr("class", "node-glow");
+
+            node.append("circle")
+                .attr("r", d => d.radius || 13)
+                .attr("fill", d => d.color || "#10b981")
+                .attr("stroke", "#ffffff")
+                .attr("stroke-width", 1.8)
+                .attr("class", "node-circle");
+
+            node.append("text")
+                .attr("dy", d => (d.radius || 13) + 13)
+                .attr("text-anchor", "middle")
+                .attr("class", "subgraph-node-label")
+                .text(d => d.label);
+
+            // Floating Tooltip
+            let tooltip = d3.select("#subgraphGlobalTooltip");
+            if (tooltip.empty()) {
+                tooltip = d3.select("body").append("div")
+                    .attr("id", "subgraphGlobalTooltip")
+                    .attr("class", "subgraph-floating-tooltip")
+                    .style("opacity", 0);
+            }
+
+            node.on("mouseover", (event, d) => {
+                let propsHtml = "";
+                if (d.properties) {
+                    for (const [k, v] of Object.entries(d.properties)) {
+                        propsHtml += `<div class="tooltip-prop"><span class="prop-k">${escapeHtml(k)}:</span> <span class="prop-v">${escapeHtml(v)}</span></div>`;
+                    }
+                }
+                tooltip.html(`
+                    <div class="tooltip-header">
+                        <span class="tooltip-badge" style="background:${d.color};">${escapeHtml(d.type)}</span>
+                        <strong>${escapeHtml(d.label)}</strong>
+                    </div>
+                    ${propsHtml ? `<div class="tooltip-body">${propsHtml}</div>` : ''}
+                `)
+                .style("left", (event.pageX + 14) + "px")
+                .style("top", (event.pageY - 28) + "px")
+                .transition().duration(150).style("opacity", 1);
+            })
+            .on("mousemove", (event) => {
+                tooltip.style("left", (event.pageX + 14) + "px").style("top", (event.pageY - 28) + "px");
+            })
+            .on("mouseout", () => {
+                tooltip.transition().duration(200).style("opacity", 0);
+            });
+
+            node.on("click", (event, clickedNode) => {
+                event.stopPropagation();
+                const connectedNodeIds = new Set([clickedNode.id]);
+                links.forEach(l => {
+                    const sId = typeof l.source === 'object' ? l.source.id : l.source;
+                    const tId = typeof l.target === 'object' ? l.target.id : l.target;
+                    if (sId === clickedNode.id) connectedNodeIds.add(tId);
+                    if (tId === clickedNode.id) connectedNodeIds.add(sId);
+                });
+
+                node.style("opacity", n => connectedNodeIds.has(n.id) ? 1 : 0.22);
+                link.style("opacity", l => {
+                    const sId = typeof l.source === 'object' ? l.source.id : l.source;
+                    const tId = typeof l.target === 'object' ? l.target.id : l.target;
+                    return (sId === clickedNode.id || tId === clickedNode.id) ? 1 : 0.12;
+                });
+                linkLabel.style("opacity", l => {
+                    const sId = typeof l.source === 'object' ? l.source.id : l.source;
+                    const tId = typeof l.target === 'object' ? l.target.id : l.target;
+                    return (sId === clickedNode.id || tId === clickedNode.id) ? 1 : 0.12;
+                });
+            });
+
+            svg.on("click", () => {
+                node.style("opacity", 1);
+                link.style("opacity", 1);
+                linkLabel.style("opacity", 1);
+            });
+
+            simulation.on("tick", () => {
+                link
+                    .attr("x1", d => d.source.x)
+                    .attr("y1", d => d.source.y)
+                    .attr("x2", d => d.target.x)
+                    .attr("y2", d => d.target.y);
+
+                linkLabel
+                    .attr("x", d => (d.source.x + d.target.x) / 2)
+                    .attr("y", d => (d.source.y + d.target.y) / 2);
+
+                node
+                    .attr("transform", d => `translate(${d.x},${d.y})`);
+            });
+
+            function dragstarted(event) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                event.subject.fx = event.subject.x;
+                event.subject.fy = event.subject.y;
+            }
+
+            function dragged(event) {
+                event.subject.fx = event.x;
+                event.subject.fy = event.y;
+            }
+
+            function dragended(event) {
+                if (!event.active) simulation.alphaTarget(0);
+                event.subject.fx = null;
+                event.subject.fy = null;
+            }
+        }
+
+        function zoomSubgraph(containerId, scaleMultiplier) {
+            const entry = activeGraphSimulations[containerId];
+            if (!entry) return;
+            entry.svg.transition().duration(250).call(entry.zoom.scaleBy, scaleMultiplier);
+        }
+
+        function resetSubgraph(containerId) {
+            const entry = activeGraphSimulations[containerId];
+            if (!entry) return;
+            entry.svg.transition().duration(350).call(entry.zoom.transform, d3.zoomIdentity);
+        }
+
+        function toggleSubgraphExpand(cardId) {
+            const card = document.getElementById(cardId);
+            if (!card) return;
+            card.classList.toggle("expanded");
+            const stage = card.querySelector(".subgraph-stage");
+            if (stage && activeGraphSimulations[stage.id]) {
+                const entry = activeGraphSimulations[stage.id];
+                entry.svg.attr("viewBox", [0, 0, stage.clientWidth, card.classList.contains("expanded") ? 460 : 280]);
+            }
         }
 
         function createDoctorCard(item) {
