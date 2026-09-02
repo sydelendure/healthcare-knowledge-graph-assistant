@@ -60,66 +60,80 @@ def ask():
             )
         }), 500
 
-    try:
-        response = requests.post(
-            f"{backend_url}/ask",
-            json={"question": question},
-            timeout=60
-        )
-
-        if response.status_code == 200:
-            return jsonify(response.json())
-
+    # Auto-retry up to 3 times if Render backend is waking up (502/503/ConnectionError)
+    max_retries = 3
+    for attempt in range(max_retries):
         try:
-            error_data = response.json()
-            err_msg = error_data.get("detail") or error_data.get("error") or error_data.get("message")
-            if not err_msg:
-                err_msg = "The backend service was unable to process your question."
-            return jsonify({"error": err_msg}), response.status_code
-        except Exception:
-            if response.status_code in [502, 503, 504]:
+            response = requests.post(
+                f"{backend_url}/ask",
+                json={"question": question},
+                timeout=45
+            )
+
+            if response.status_code == 200:
+                return jsonify(response.json())
+
+            if response.status_code in [502, 503, 504] and attempt < max_retries - 1:
+                import time
+                time.sleep(2.0)
+                continue
+
+            try:
+                error_data = response.json()
+                err_msg = error_data.get("detail") or error_data.get("error") or error_data.get("message")
+                if not err_msg:
+                    err_msg = "The backend service was unable to process your question."
+                return jsonify({"error": err_msg}), response.status_code
+            except Exception:
+                if response.status_code in [502, 503, 504]:
+                    return jsonify({
+                        "error": "The backend service is currently waking up on Render. Please try your question again in a moment."
+                    }), response.status_code
                 return jsonify({
-                    "error": "The backend service is currently waking up. Please try your question again in a few seconds."
+                    "error": "The backend service returned an unexpected response. Please try again."
                 }), response.status_code
+
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            if attempt < max_retries - 1:
+                import time
+                time.sleep(2.5)
+                continue
             return jsonify({
-                "error": "The backend service returned an unexpected response. Please try again."
-            }), response.status_code
+                "error": (
+                    "Unable to connect to the healthcare backend service. "
+                    "The backend service may be waking up (Render Free Tier). Please try again in a few moments."
+                )
+            }), 503
 
-    except (requests.exceptions.InvalidURL, requests.exceptions.MissingSchema):
-        return jsonify({
-            "error": (
-                f"Invalid FASTAPI_URL configured ('{backend_url}'). "
-                "Please ensure it is a valid URL starting with https://"
-            )
-        }), 500
+        except (requests.exceptions.InvalidURL, requests.exceptions.MissingSchema):
+            return jsonify({
+                "error": (
+                    f"Invalid FASTAPI_URL configured ('{backend_url}'). "
+                    "Please ensure it is a valid URL starting with https://"
+                )
+            }), 500
 
-    except requests.exceptions.ConnectionError:
-        return jsonify({
-            "error": (
-                "Unable to connect to the healthcare backend service. "
-                "The backend service may be waking up (Render Free Tier). Please try again in a few moments."
-            )
-        }), 503
+        except requests.exceptions.RequestException as e:
+            app.logger.error("Frontend RequestException: %s", e)
+            return jsonify({
+                "error": "A network communication error occurred with the backend service."
+            }), 502
 
-    except requests.exceptions.Timeout:
-        return jsonify({
-            "error": (
-                "The request to the healthcare backend timed out. "
-                "Please try your question again."
-            )
-        }), 504
+        except Exception as e:
+            app.logger.error("Frontend unexpected error: %s", e)
+            return jsonify({
+                "error": "An unexpected error occurred while processing your question."
+            }), 500
 
-    except requests.exceptions.RequestException as e:
-        app.logger.error("Frontend RequestException: %s", e)
-        return jsonify({
-            "error": "A network communication error occurred with the backend service."
-        }), 502
 
-    except Exception as e:
-        app.logger.error("Frontend unexpected error: %s", e)
-        return jsonify({
-            "error": "An unexpected error occurred while processing your question."
-        }), 500
+@app.route("/warmup")
+def warmup():
+    backend_url = get_fastapi_url()
+    try:
+        r = requests.get(f"{backend_url}/health", timeout=10)
+        return jsonify({"status": "warm", "backend_status": r.status_code})
+    except Exception:
+        return jsonify({"status": "warming_up"})
 
 
 if __name__ == "__main__":

@@ -704,9 +704,12 @@
             }
         }
 
-        // Initialize on page load (Auto-popup Onboarding on initial visit)
+        // Initialize on page load (Auto-popup Onboarding on initial visit + Warmup backend)
         document.addEventListener("DOMContentLoaded", () => {
             initTheme();
+
+            // Background pre-warm for Render Free Tier spin-up
+            fetch("/warmup").catch(() => {});
 
             const isDismissed = localStorage.getItem("healthgraph_onboarding_dismissed");
             if (!isDismissed) {
