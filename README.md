@@ -62,34 +62,27 @@ Handles duplicate doctor names across facilities and departments without probabi
 
 ## System Architecture
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                   1. PRESENTATION LAYER (UI)                     │
-│  • Flask (Port 5000) & Jinja2 Template (frontend/templates)     │
-│  • D3.js Force-Directed Graph Visualizer (In-Chat)               │
-│  • 3D Hero Artwork, Live Metrics Strip & Disambiguation Cards    │
-└────────────────────────────────┬─────────────────────────────────┘
-                                 │ HTTP POST /ask (with Auto-Retry & Warmup)
-┌────────────────────────────────▼─────────────────────────────────┐
-│              2. ORCHESTRATION & NLP LAYER (API)                  │
-│  • FastAPI (Port 8001) in backend/main.py                        │
-│  • Hybrid Intent Classifier (Fast Rule Parser + LLM Fallback)   │
-│  • Subgraph Extraction & Disambiguation Engine                   │
-└────────────────────────────────┬─────────────────────────────────┘
-                                 │ Invokes Python query methods
-┌────────────────────────────────▼─────────────────────────────────┐
-│             3. GRAPH ALGORITHM & QUERY LAYER                     │
-│  • Parameterized Cypher Engine (app/graph_queries.py)            │
-│  • Dijkstra Shortest Path across :CONNECTED_TO network           │
-│  • Specialty Mismatch Verification & District Lookups            │
-└────────────────────────────────┬─────────────────────────────────┘
-                                 │ Bolt Protocol (neo4j://)
-┌────────────────────────────────▼─────────────────────────────────┐
-│               4. KNOWLEDGE GRAPH DATABASE (DATA)                 │
-│  • Neo4j AuraDB / Local Neo4j:                                   │
-│    52 Doctors, 20 Hospitals, 15 Specialties, 34 Departments,     │
-│    20 Services, 10 Locations                                     │
-└──────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph UI ["1. PRESENTATION LAYER (UI)"]
+        A["Flask Server (Port 5000) & Jinja2 Templates<br/>• D3.js Force-Directed Graph Visualizer (In-Chat)<br/>• 3D Hero Artwork & Live Metrics Strip<br/>• Interactive Disambiguation Selection Cards"]
+    end
+
+    subgraph API ["2. ORCHESTRATION & NLP LAYER (API)"]
+        B["FastAPI Server (Port 8001)<br/>• Hybrid Intent Classifier (Fast Rule Parser + LLM Fallback)<br/>• Subgraph Extraction & Relationship Builder<br/>• Context-Aware Disambiguation Engine"]
+    end
+
+    subgraph QUERY ["3. GRAPH ALGORITHM & QUERY LAYER"]
+        C["Parameterized Cypher Query Engine (app/graph_queries.py)<br/>• Dijkstra Shortest-Path Road Referrals (:CONNECTED_TO)<br/>• Specialty Mismatch Verification & Cross-Facility Hop<br/>• Geographic District Discovery (get_doctors_by_district)"]
+    end
+
+    subgraph DB ["4. KNOWLEDGE GRAPH DATABASE (DATA)"]
+        D[("Neo4j AuraDB / Local Neo4j<br/>• 52 Doctors • 20 Hospitals • 15 Specialties<br/>• 34 Departments • 20 Services • 10 Locations")]
+    end
+
+    UI -->|"HTTP POST /ask<br/>(Auto-Retry Loop & Background Warmup)"| API
+    API -->|"Invokes Parameterized Cypher Methods"| QUERY
+    QUERY -->|"Bolt Protocol (neo4j+s://)"| DB
 ```
 
 ---
