@@ -63,26 +63,110 @@ Handles duplicate doctor names across facilities and departments without probabi
 ## System Architecture
 
 ```mermaid
-graph TD
-    subgraph UI ["1. PRESENTATION LAYER (UI)"]
-        A["Flask Server (Port 5000) & Jinja2 Templates<br/>• D3.js Force-Directed Graph Visualizer (In-Chat)<br/>• 3D Hero Artwork & Live Metrics Strip<br/>• Interactive Disambiguation Selection Cards"]
+flowchart TD
+    %% Custom Styling Classes
+    classDef clientStyle fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    classDef proxyStyle fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc;
+    classDef nlpStyle fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
+    classDef llmStyle fill:#581c87,stroke:#c084fc,stroke-width:2px,color:#f8fafc;
+    classDef cypherStyle fill:#1e293b,stroke:#06b6d4,stroke-width:2px,color:#f8fafc;
+    classDef algoStyle fill:#701a75,stroke:#f43f5e,stroke-width:2px,color:#f8fafc;
+    classDef dbStyle fill:#1c1917,stroke:#f59e0b,stroke-width:2px,color:#f8fafc;
+
+    %% 1. Presentation & Client Layer
+    subgraph ClientLayer ["1. PRESENTATION & CLIENT LAYER"]
+        ClientBrowser["Modern Web Client (SPA)<br/>• Real-time Conversational UI<br/>• Glassmorphic Doctor & Hospital Cards<br/>• 1-Click Disambiguation Selection<br/>• 3D Knowledge Graph Hero Card"]:::clientStyle
+        D3Visualizer["Interactive D3.js Force-Directed Graph<br/>• Physics Simulation & Drag Physics<br/>• Dynamic Domain Color Coding<br/>• Hover Glass Tooltips & Node Focus<br/>• Pan, Zoom & Center Reset"]:::clientStyle
+        FlaskProxy["Flask Proxy Gateway (:5000)<br/>• 3-Attempt Exponential Backoff<br/>• Async Background /warmup<br/>• Render Cold-Start Mitigation"]:::proxyStyle
     end
 
-    subgraph API ["2. ORCHESTRATION & NLP LAYER (API)"]
-        B["FastAPI Server (Port 8001)<br/>• Hybrid Intent Classifier (Fast Rule Parser + LLM Fallback)<br/>• Subgraph Extraction & Relationship Builder<br/>• Context-Aware Disambiguation Engine"]
+    %% 2. Orchestration & NLP Layer
+    subgraph ApiLayer ["2. ORCHESTRATION & HYBRID NLP LAYER"]
+        FastAPI["FastAPI Orchestrator (:8001)<br/>• REST API Endpoint (/ask)<br/>• Subgraph Network Extraction<br/>• Relationship Deduplication Engine"]:::nlpStyle
+        
+        subgraph HybridNLP ["Hybrid Intent Classifier"]
+            FastParser["Tier 1: Fast Rule & Regex Parser<br/>• Instant 0ms In-Memory Resolution<br/>• Direct Specialty, District & Doctor Extraction"]:::nlpStyle
+            LLMParser["Tier 2: Groq / OpenAI LLM Fallback<br/>• Model: llama-3.3-70b-versatile<br/>• Complex Phrasing & Canonical Mapping"]:::llmStyle
+        end
+
+        DisambigEngine["Context-Aware Disambiguation Engine<br/>• same_hospital -> (Dept + Specialty)<br/>• different_hospitals -> (Facility + Specialty)<br/>• mixed -> (Facility + Dept + Specialty)"]:::nlpStyle
     end
 
-    subgraph QUERY ["3. GRAPH ALGORITHM & QUERY LAYER"]
-        C["Parameterized Cypher Query Engine (app/graph_queries.py)<br/>• Dijkstra Shortest-Path Road Referrals (:CONNECTED_TO)<br/>• Specialty Mismatch Verification & Cross-Facility Hop<br/>• Geographic District Discovery (get_doctors_by_district)"]
+    %% 3. Graph Query & Algorithmic Layer
+    subgraph QueryLayer ["3. GRAPH ALGORITHM & CYPHER ENGINE"]
+        CypherEngine["Parameterized Cypher Queries<br/>• Doctor Discovery by Specialty / District<br/>• Facility Lookups & Certified Affiliations"]:::cypherStyle
+        
+        ShortestPath["Dijkstra Shortest-Path Road Referral<br/>• Traverses :CONNECTED_TO network<br/>• Calculates Cumulative Distance in km<br/>• Resolves Missing Specialty Facilities"]:::algoStyle
+        
+        MismatchVerify["Specialty Mismatch Verification<br/>• Validates Practitioner Credentials<br/>• Cross-Facility Network Traversal"]:::algoStyle
     end
 
-    subgraph DB ["4. KNOWLEDGE GRAPH DATABASE (DATA)"]
-        D[("Neo4j AuraDB / Local Neo4j<br/>• 52 Doctors • 20 Hospitals • 15 Specialties<br/>• 34 Departments • 20 Services • 10 Locations")]
+    %% 4. Data Storage Layer
+    subgraph DatabaseLayer ["4. KNOWLEDGE GRAPH DATABASE LAYER"]
+        Neo4j[("Neo4j AuraDB / Knowledge Graph<br/>• 52 Doctors &nbsp;&bull;&nbsp; 20 Hospitals<br/>• 15 Specialties &nbsp;&bull;&nbsp; 34 Departments<br/>• 20 Services &nbsp;&bull;&nbsp; 10 Locations<br/>• Weighted Road Distance Edges")]:::dbStyle
     end
 
-    UI -->|"HTTP POST /ask<br/>(Auto-Retry Loop & Background Warmup)"| API
-    API -->|"Invokes Parameterized Cypher Methods"| QUERY
-    QUERY -->|"Bolt Protocol (neo4j+s://)"| DB
+    %% Connections & Flow
+    ClientBrowser -->|"User Prompt"| FlaskProxy
+    FlaskProxy -->|"HTTP POST /ask"| FastAPI
+    FastAPI --> HybridNLP
+    FastParser -.->|"If Unmatched"| LLMParser
+    
+    HybridNLP -->|"Structured Intent"| CypherEngine
+    HybridNLP -->|"Specialty Lacking at Origin"| ShortestPath
+    HybridNLP -->|"Specialty Inconsistency"| MismatchVerify
+    HybridNLP -->|"Duplicate Doctor Name"| DisambigEngine
+    
+    CypherEngine -->|"Bolt Protocol (neo4j+s://)"| Neo4j
+    ShortestPath -->|"ShortestPath Cypher Query"| Neo4j
+    MismatchVerify -->|"Credential Verification Query"| Neo4j
+    DisambigEngine -->|"Candidate Grouping Query"| Neo4j
+    
+    Neo4j -->|"Graph Results & Traversal Paths"| FastAPI
+    FastAPI -->|"JSON Response + Subgraph Payload"| FlaskProxy
+    FlaskProxy -->|"Stream Response Payload"| ClientBrowser
+    ClientBrowser -->|"Renders Traversed Subgraph"| D3Visualizer
+```
+
+### End-to-End Query Execution Pipeline
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as User / Clinical Staff
+    participant UI as Browser UI & D3.js Visualizer
+    participant Flask as Flask Gateway (:5000)
+    participant FastAPI as FastAPI Backend (:8001)
+    participant NLP as Hybrid NLP Engine
+    participant Cypher as Graph Algorithm Engine
+    participant Neo4j as Neo4j Graph Database
+
+    User->>UI: Types query (e.g., "General physician at Metro Central")
+    UI->>Flask: POST /ask { question }
+    Flask->>FastAPI: Forward query with Auto-Retry
+    FastAPI->>NLP: understand_question(question)
+    
+    alt Fast Rule Match
+        NLP-->>FastAPI: { intent: "doctors_by_specialty_and_location", ... } (0ms)
+    else Complex / Nuanced Query
+        NLP->>NLP: Invoke Groq / OpenAI LLM
+        NLP-->>FastAPI: { intent: "doctors_by_specialty_and_location", ... }
+    end
+
+    FastAPI->>Cypher: find_doctors_with_graph_hopping("General Physician", "Metro Central")
+    Cypher->>Neo4j: Query direct facility specialty
+    Neo4j-->>Cypher: Specialty not available at Metro Central
+    
+    Cypher->>Neo4j: Dijkstra shortestPath((h1:Hospital)-[:CONNECTED_TO*]-(h2:Hospital))
+    Neo4j-->>Cypher: Path: Metro Central -> Northfield (6.2 km, Dr. Amaya Desai)
+    
+    Cypher-->>FastAPI: Results + Hop Info (origin, target, path, distance)
+    FastAPI->>FastAPI: build_subgraph_from_results() & deduplicate links
+    FastAPI-->>Flask: JSON { response, results, graph_hop_info, subgraph }
+    Flask-->>UI: Forward response payload
+    UI->>UI: Render Conversational Summary & Doctor Cards
+    UI->>UI: D3.js mounts SVG & initializes Force Simulation
+    UI-->>User: Interactive Subgraph with live drag physics & road referral badge
 ```
 
 ---
