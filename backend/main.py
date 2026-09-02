@@ -249,6 +249,13 @@ def build_subgraph_from_results(
                 "Hospital": origin_name
             })
 
+        if target_name:
+            target_id = f"hosp_{target_name}"
+            add_node(target_id, target_name, "Hospital", "#10b981", 17, {
+                "Role": "Reachable Facility (Has Specialty)",
+                "Hospital": target_name
+            })
+
         if len(traversal_path) >= 2:
             for i in range(len(traversal_path) - 1):
                 n1 = traversal_path[i]
@@ -273,11 +280,14 @@ def build_subgraph_from_results(
                 "highlighted": True
             })
 
+    # Strict relationship validation: guarantee both source and target nodes exist in the graph
+    valid_links = [l for l in links if l["source"] in node_ids and l["target"] in node_ids]
+
     return {
         "nodes": nodes,
-        "links": links,
+        "links": valid_links,
         "node_count": len(nodes),
-        "link_count": len(links)
+        "link_count": len(valid_links)
     }
 
 
