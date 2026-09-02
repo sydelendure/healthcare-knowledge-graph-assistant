@@ -81,7 +81,7 @@ def find_doctors_with_graph_hopping(specialty, location):
                     "graph_hopped": False
                 }
 
-            # 2. Shortest Path Traversal via :CONNECTED_TO Hospital Network
+            # 2. Multi-hop shortest-path traversal using Neo4j's shortestPath() with cumulative distance calculation and hop/distance ranking
             shortest_path_query = """
             MATCH (origin:Hospital)
             WHERE toLower(origin.name) CONTAINS toLower($location)
@@ -589,7 +589,7 @@ def check_doctor_specialty_with_graph_hopping(doctor_name, requested_specialty, 
 
 def find_closest_hospitals(origin_hospital, specialty=None):
     """
-    Finds the closest hospital(s) in the referral network using shortestPath algorithm.
+    Multi-hop shortest-path traversal using Neo4j's shortestPath() with cumulative distance calculation and hop/distance ranking.
     """
     db = Neo4jDatabase()
     try:
