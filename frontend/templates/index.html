@@ -190,15 +190,20 @@
                     </button>
                 </div>
 
-                <!-- KNOWLEDGE GRAPH STATUS CARD -->
-                <div class="about-card" onclick="openAboutModal()" style="cursor: pointer;"
-                    title="Click to view About details">
-                    <div class="about-title-row">
-                        <span class="pulse-dot"></span>
-                        <span class="about-status">Neo4j Graph Active</span>
+                <!-- KNOWLEDGE GRAPH STATUS CARD WITH 3D IMAGE -->
+                <div class="about-card" onclick="openOnboardingModal()" style="cursor: pointer;"
+                    title="Click to explore Knowledge Graph Tour">
+                    <div class="sidebar-kg-banner">
+                        <img src="{{ url_for('static', filename='onboarding_hero.jpg') }}" alt="Neo4j Knowledge Graph" class="sidebar-kg-img">
+                        <div class="sidebar-kg-overlay">
+                            <span class="pulse-dot"></span>
+                            <span class="about-status">Neo4j Graph Active</span>
+                        </div>
                     </div>
-                    <p class="about-desc">20 Hospitals &bull; 15 Specialties &bull; 50 Doctors</p>
-                    <span class="about-caption">Click for details &rarr;</span>
+                    <div class="about-card-body">
+                        <p class="about-desc">20 Hospitals &bull; 15 Specialties &bull; 52 Doctors</p>
+                        <span class="about-caption">Explore Graph Tour &rarr;</span>
+                    </div>
                 </div>
             </div>
         </aside>
