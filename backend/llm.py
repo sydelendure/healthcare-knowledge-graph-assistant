@@ -158,10 +158,12 @@ SPECIALTY_MAP = {
 HOSPITAL_PATTERNS = [
     # Full canonical names
     (r'\bmetro central medical center\b', 'Metro Central Medical Center'),
-    (r'\bminesotta specialty hospital\b', 'Minesotta Specialty Hospital'),
+    (r'\bnorth district specialty hospital\b', 'North District Specialty Hospital'),
+    (r'\bminesotta specialty hospital\b', 'North District Specialty Hospital'),
     (r'\briverdale general hospital\b', 'Riverdale General Hospital'),
     (r'\bbayview healthcare center\b', 'Bayview Healthcare Center'),
-    (r'\bbridge candy medical center\b', 'Bridge Candy Medical Center'),
+    (r'\bsouth district medical center\b', 'South District Medical Center'),
+    (r'\bbridge candy medical center\b', 'South District Medical Center'),
     (r'\boakridge specialty hospital\b', 'Oakridge Specialty Hospital'),
     (r'\bhighland community hospital\b', 'Highland Community Hospital'),
     (r'\bpinecrest medical institute\b', 'Pinecrest Medical Institute'),
@@ -180,9 +182,11 @@ HOSPITAL_PATTERNS = [
     # Recognizable keywords/prefixes
     (r'\bapex advanced\b', 'Apex Advanced Medical Center'),
     (r'\bapex regional\b', 'Apex Regional Hospital'),
-    (r'\bbridge candy\b', 'Bridge Candy Medical Center'),
+    (r'\bsouth district medical\b', 'South District Medical Center'),
+    (r'\bbridge candy\b', 'South District Medical Center'),
     (r'\bmetro central\b', 'Metro Central Medical Center'),
-    (r'\bminesotta\b', 'Minesotta Specialty Hospital'),
+    (r'\bminesotta\b', 'North District Specialty Hospital'),
+    (r'\bnorth district specialty\b', 'North District Specialty Hospital'),
     (r'\bnorthfield community\b', 'Northfield Community Hospital'),
     (r'\bnorthfield\b', 'Northfield Community Hospital'),
     (r'\bhighland community\b', 'Highland Community Hospital'),
@@ -201,6 +205,67 @@ HOSPITAL_PATTERNS = [
     (r'\bsilver spring healthcare\b', 'Silver Spring Healthcare Center'),
 ]
 
+CANONICAL_HOSPITALS = [
+    "Metro Central Medical Center",
+    "North District Specialty Hospital",
+    "Riverdale General Hospital",
+    "Bayview Healthcare Center",
+    "South District Medical Center",
+    "Oakridge Specialty Hospital",
+    "Highland Community Hospital",
+    "Pinecrest Medical Institute",
+    "Clearwater General Hospital",
+    "Silver Spring Healthcare Center",
+    "Fairview Medical Center",
+    "Apex Regional Hospital",
+    "Northfield Community Hospital",
+    "Riverdale Specialty Center",
+    "Bayview General Hospital",
+    "Oakridge General Hospital",
+    "Pinecrest Community Hospital",
+    "Clearwater Specialty Center",
+    "Silver Spring General Hospital",
+    "Apex Advanced Medical Center",
+]
+
+
+def resolve_hospital_name(input_name: str) -> str | None:
+    if not input_name:
+        return None
+    raw = input_name.strip()
+    raw_low = raw.lower()
+
+    # 1. Exact match
+    for h in CANONICAL_HOSPITALS:
+        if h.lower() == raw_low:
+            return h
+
+    # 2. Substring match
+    for h in CANONICAL_HOSPITALS:
+        if raw_low in h.lower() or h.lower() in raw_low:
+            return h
+
+    # 3. Token-based overlap scoring
+    generic_words = {'hospital', 'center', 'medical', 'healthcare', 'clinic', 'institute', 'at', 'in', 'the', 'of', 'and', 'for'}
+    input_tokens = set(re.findall(r'\w+', raw_low))
+    distinct_input = input_tokens - generic_words
+
+    best_match = None
+    best_score = 0
+
+    for h in CANONICAL_HOSPITALS:
+        h_tokens = set(re.findall(r'\w+', h.lower()))
+        if distinct_input and distinct_input.issubset(h_tokens):
+            score = len(input_tokens.intersection(h_tokens))
+            if score > best_score:
+                best_score = score
+                best_match = h
+
+    if best_match:
+        return best_match
+
+    return raw
+
 
 def extract_specialty(text: str):
     t = text.lower()
@@ -218,11 +283,16 @@ def extract_hospital(text: str):
     for prep in [' at ', ' in ', ' for ']:
         if prep in t:
             after = t.split(prep)[-1].strip()
-            if any(w in after for w in ['hospital', 'medical center', 'healthcare', 'clinic', 'institute']):
+            if any(w in after for w in ['hospital', 'medical center', 'healthcare', 'clinic', 'institute', 'center', 'medical']):
                 clean = re.sub(r'^(the|a|an)\s+', '', after).strip()
                 clean = re.sub(r'[^\w\s]', '', clean).strip()
                 if clean:
-                    return clean.title()
+                    resolved = resolve_hospital_name(clean)
+                    return resolved or clean.title()
+    # Check if any canonical hospital is fuzzily mentioned
+    resolved_fuzzy = resolve_hospital_name(t)
+    if resolved_fuzzy and resolved_fuzzy in CANONICAL_HOSPITALS and resolved_fuzzy.lower() != t:
+        return resolved_fuzzy
     return None
 
 

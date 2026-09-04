@@ -307,11 +307,75 @@ def get_doctors_by_district(district):
         db.close()
 
 
+def resolve_hospital_name(input_name: str) -> str | None:
+    if not input_name:
+        return None
+    raw = input_name.strip()
+    raw_low = raw.lower()
+
+    canonical_hospitals = [
+        "Metro Central Medical Center",
+        "North District Specialty Hospital",
+        "Riverdale General Hospital",
+        "Bayview Healthcare Center",
+        "South District Medical Center",
+        "Oakridge Specialty Hospital",
+        "Highland Community Hospital",
+        "Pinecrest Medical Institute",
+        "Clearwater General Hospital",
+        "Silver Spring Healthcare Center",
+        "Fairview Medical Center",
+        "Apex Regional Hospital",
+        "Northfield Community Hospital",
+        "Riverdale Specialty Center",
+        "Bayview General Hospital",
+        "Oakridge General Hospital",
+        "Pinecrest Community Hospital",
+        "Clearwater Specialty Center",
+        "Silver Spring General Hospital",
+        "Apex Advanced Medical Center",
+    ]
+
+    for h in canonical_hospitals:
+        if h.lower() == raw_low:
+            return h
+
+    for h in canonical_hospitals:
+        if raw_low in h.lower() or h.lower() in raw_low:
+            return h
+
+    generic_words = {'hospital', 'center', 'medical', 'healthcare', 'clinic', 'institute', 'at', 'in', 'the', 'of', 'and', 'for'}
+    import re
+    input_tokens = set(re.findall(r'\w+', raw_low))
+    distinct_input = input_tokens - generic_words
+
+    best_match = None
+    best_score = 0
+
+    for h in canonical_hospitals:
+        h_tokens = set(re.findall(r'\w+', h.lower()))
+        if distinct_input and distinct_input.issubset(h_tokens):
+            score = len(input_tokens.intersection(h_tokens))
+            if score > best_score:
+                best_score = score
+                best_match = h
+
+    if best_match:
+        return best_match
+
+    return raw
+
+
 def get_doctors_by_hospital(hospital_name):
+    resolved = resolve_hospital_name(hospital_name) or hospital_name
     query = """
     MATCH (d:Doctor)-[:WORKS_AT]->(h:Hospital)
-    WHERE toLower(h.name) = toLower($hospital_name)
+    WHERE toLower(h.name) = toLower($resolved)
+       OR toLower(h.name) CONTAINS toLower($resolved)
+       OR toLower($resolved) CONTAINS toLower(h.name)
+       OR toLower(h.name) = toLower($hospital_name)
        OR toLower(h.name) CONTAINS toLower($hospital_name)
+       OR toLower($hospital_name) CONTAINS toLower(h.name)
     OPTIONAL MATCH (d)-[:HAS_SPECIALTY]->(s:Speciality)
     OPTIONAL MATCH (h)-[:LOCATED_IN]->(l:Location)
     RETURN
@@ -331,6 +395,7 @@ def get_doctors_by_hospital(hospital_name):
         with db.driver.session() as session:
             result = session.run(
                 query,
+                resolved=resolved,
                 hospital_name=hospital_name
             )
 
