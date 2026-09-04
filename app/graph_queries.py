@@ -307,6 +307,77 @@ def get_doctors_by_district(district):
         db.close()
 
 
+def get_doctors_by_location(location):
+    query = """
+    MATCH (h:Hospital)-[:LOCATED_IN]->(l:Location)
+    WHERE toLower(l.city) = toLower($location)
+       OR toLower(l.district) = toLower($location)
+       OR toLower(l.city) CONTAINS toLower($location)
+       OR toLower($location) CONTAINS toLower(l.city)
+    MATCH (d:Doctor)-[:WORKS_AT]->(h)
+    OPTIONAL MATCH (d)-[:HAS_SPECIALTY]->(s:Speciality)
+    OPTIONAL MATCH (h)-[:HAS_DEPARTMENT]->(dep:Department)-[:OFFERS_SPECIALTY]->(s)
+    RETURN
+        d.doctor_id AS doctor_id,
+        d.name AS doctor,
+        s.name AS specialization,
+        coalesce(dep.name, s.name, 'Clinical') AS department,
+        h.hospital_id AS hospital_id,
+        h.name AS hospital,
+        h.type AS hospital_type,
+        h.beds AS hospital_beds,
+        l.city AS city,
+        l.district AS district
+    ORDER BY h.name, d.name
+    """
+
+    db = Neo4jDatabase()
+
+    try:
+        with db.driver.session() as session:
+            result = session.run(
+                query,
+                location=location
+            )
+
+            return [record.data() for record in result]
+
+    finally:
+        db.close()
+
+
+def get_hospitals_by_location(location):
+    query = """
+    MATCH (h:Hospital)-[:LOCATED_IN]->(l:Location)
+    WHERE toLower(l.city) = toLower($location)
+       OR toLower(l.district) = toLower($location)
+       OR toLower(l.city) CONTAINS toLower($location)
+       OR toLower($location) CONTAINS toLower(l.city)
+    RETURN
+        h.hospital_id AS hospital_id,
+        h.name AS hospital,
+        h.type AS hospital_type,
+        h.beds AS beds,
+        l.city AS city,
+        l.district AS district
+    ORDER BY h.name
+    """
+
+    db = Neo4jDatabase()
+
+    try:
+        with db.driver.session() as session:
+            result = session.run(
+                query,
+                location=location
+            )
+
+            return [record.data() for record in result]
+
+    finally:
+        db.close()
+
+
 def resolve_hospital_name(input_name: str) -> str | None:
     if not input_name:
         return None

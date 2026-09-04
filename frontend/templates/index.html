@@ -1199,10 +1199,16 @@
             } else if (intent === "doctors_by_specialty_and_location" || intent === "doctors_by_specialty_and_district") {
                 const locLabel = first.city || first.district || "";
                 leadText = `I found ${count} ${count === 1 ? 'doctor' : 'doctors'}${first.specialization ? ' in ' + first.specialization : ''}${locLabel ? ' in ' + locLabel : ''}:`;
+            } else if (intent === "doctors_by_location") {
+                const locLabel = first.city || first.district || "";
+                leadText = `I found ${count} ${count === 1 ? 'doctor' : 'doctors'} across medical centers in <strong>${escapeHtml(locLabel || 'this locality')}</strong>:`;
             } else if (intent === "doctors_by_specialty") {
                 leadText = `I found ${count} ${count === 1 ? 'doctor' : 'doctors'}${first.specialization ? ' in ' + first.specialization : ''} across all districts:`;
             } else if (intent === "doctors_by_hospital") {
                 leadText = `I found ${count} ${count === 1 ? 'doctor' : 'doctors'} at ${first.hospital || 'this medical center'}:`;
+            } else if (intent === "hospitals_by_location") {
+                const locLabel = first.city || first.district || "";
+                leadText = `I found ${count} ${count === 1 ? 'hospital' : 'hospitals'} located in <strong>${escapeHtml(locLabel || 'this locality')}</strong>:`;
             } else if (intent === "hospitals_by_district") {
                 leadText = `I found ${count} ${count === 1 ? 'hospital' : 'hospitals'}${first.district ? ' in ' + first.district : ''}:`;
             } else if (intent === "all_hospitals") {

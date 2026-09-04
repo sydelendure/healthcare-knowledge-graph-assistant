@@ -5,8 +5,10 @@ from app.graph_queries import (
     find_doctors_with_graph_hopping,
     get_doctors_by_specialty,
     get_doctors_by_district,
+    get_doctors_by_location,
     get_doctors_by_hospital,
     get_hospitals_by_district,
+    get_hospitals_by_location,
     get_all_hospitals,
     get_doctor_by_name,
     check_doctor_specialty_with_graph_hopping,
@@ -444,6 +446,14 @@ def ask_question(request: QuestionRequest):
         else:
             results = []
 
+    elif intent == "doctors_by_location":
+
+        location = intent_data.get("location") or intent_data.get("city") or intent_data.get("district")
+        if location:
+            results = get_doctors_by_location(location)
+        else:
+            results = []
+
     elif intent == "doctors_by_hospital":
 
         hospital_name = intent_data.get("hospital_name")
@@ -457,6 +467,14 @@ def ask_question(request: QuestionRequest):
         district = intent_data.get("district")
         if district:
             results = get_hospitals_by_district(district)
+        else:
+            results = get_all_hospitals()
+
+    elif intent == "hospitals_by_location":
+
+        location = intent_data.get("location") or intent_data.get("city") or intent_data.get("district")
+        if location:
+            results = get_hospitals_by_location(location)
         else:
             results = get_all_hospitals()
 
