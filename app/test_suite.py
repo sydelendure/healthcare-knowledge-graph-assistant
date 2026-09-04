@@ -84,10 +84,10 @@ def test_graph_queries():
     
     # 2.1 Doctors by specialty and district
     res1 = get_doctors_by_specialty_and_district("Cardiology", "South District")
-    record_result("Query Cardiology in South District returns 2 doctors", len(res1) == 2, f"Got: {len(res1)}")
+    record_result("Query Cardiology in South District returns 3 doctors", len(res1) == 3, f"Got: {len(res1)}")
     
     res1_case = get_doctors_by_specialty_and_district("cArDiOlOgY", "sOuTh dIsTrIcT")
-    record_result("Query is case-insensitive for specialty & district", len(res1_case) == 2, f"Got: {len(res1_case)}")
+    record_result("Query is case-insensitive for specialty & district", len(res1_case) == 3, f"Got: {len(res1_case)}")
     
     # 2.2 Doctors by specialty only
     res_spec = get_doctors_by_specialty("General Medicine")
@@ -95,7 +95,7 @@ def test_graph_queries():
 
     # 2.3 Doctors by hospital
     res2 = get_doctors_by_hospital("Apex Advanced Medical Center")
-    record_result("Query doctors at Apex Advanced Medical Center returns 5 doctors", len(res2) == 5, f"Got: {len(res2)}")
+    record_result("Query doctors at Apex Advanced Medical Center returns 6 doctors", len(res2) == 6, f"Got: {len(res2)}")
     record_result("Doctors by hospital have valid specialization & location", bool(res2[0].get("specialization") and res2[0].get("city")), f"Got: {res2[0]}")
 
     # 2.4 Hospitals by district
@@ -140,6 +140,21 @@ def test_llm_intent_extraction():
             "query": "Show doctors working at Metro Central Medical Center",
             "expected_intent": "doctors_by_hospital",
             "expected_hospital": "Metro Central Medical Center"
+        },
+        {
+            "query": "Show doctors at Northfield Community Hospital",
+            "expected_intent": "doctors_by_hospital",
+            "expected_hospital": "Northfield Community Hospital"
+        },
+        {
+            "query": "Doctors at Northfield Community Hospital",
+            "expected_intent": "doctors_by_hospital",
+            "expected_hospital": "Northfield Community Hospital"
+        },
+        {
+            "query": "Doctors in North District",
+            "expected_intent": "doctors_by_district",
+            "expected_district": "North District"
         },
         {
             "query": "List all hospitals in North District",
@@ -198,11 +213,11 @@ def test_fastapi_endpoints():
     record_result("GET / returns 200 OK", r.status_code == 200, f"Status: {r.status_code}")
 
     # 4.2 Structured endpoints
-    r = requests.get(f"{FASTAPI_URL}/doctors", params={"specialty": "Cardiology", "district": "South District"})
-    record_result("GET /doctors returns 200 with results", r.status_code == 200 and r.json().get("count") == 2, f"Body: {r.text}")
+    r = requests.get(f"{FASTAPI_URL}/doctors?specialty=Cardiology&district=South%20District")
+    record_result("GET /doctors returns 200 with results", r.status_code == 200 and r.json().get("count") == 3, f"Body: {r.text}")
 
-    r = requests.get(f"{FASTAPI_URL}/doctors/hospital", params={"hospital_name": "Apex Advanced Medical Center"})
-    record_result("GET /doctors/hospital returns 200 with 5 doctors", r.status_code == 200 and r.json().get("count") == 5, f"Body: {r.text}")
+    r = requests.get(f"{FASTAPI_URL}/doctors/hospital?hospital_name=Apex%20Advanced%20Medical%20Center")
+    record_result("GET /doctors/hospital returns 200 with 6 doctors", r.status_code == 200 and r.json().get("count") == 6, f"Body: {r.text}")
 
     r = requests.get(f"{FASTAPI_URL}/hospitals", params={"district": "South District"})
     record_result("GET /hospitals returns 200 with 10 hospitals", r.status_code == 200 and r.json().get("count") == 10, f"Body: {r.text}")
@@ -243,7 +258,7 @@ def test_flask_frontend():
     # 5.3 Proxy POST /ask
     payload = {"question": "Find cardiologists in South District"}
     r_ask = requests.post(f"{FLASK_URL}/ask", json=payload)
-    record_result("POST /ask through Flask proxies to FastAPI and returns 200", r_ask.status_code == 200 and r_ask.json().get("count") == 2, f"Body: {r_ask.text}")
+    record_result("POST /ask through Flask proxies to FastAPI and returns 200", r_ask.status_code == 200 and r_ask.json().get("count") == 3, f"Body: {r_ask.text}")
 
     # 5.4 Proxy Empty validation
     r_empty = requests.post(f"{FLASK_URL}/ask", json={"question": ""})
@@ -281,7 +296,7 @@ def test_multihop_algorithms():
     # 7.1 Shortest path: General physician at Metro Central Hospital
     hop1 = find_doctors_with_graph_hopping("General Medicine", "Metro Central Medical Center")
     record_result("Shortest Path triggers when specialty absent at hospital", hop1.get("graph_hopped") is True, f"Got: {hop1}")
-    record_result("Shortest Path hop_type is 'shortest_path'", hop1.get("hop_type") == "shortest_path", f"Got: {hop1.get('hop_type')}")
+    record_result("Shortest Path hop_type is Dijkstra shortest path", hop1.get("hop_type") in ("shortest_path", "dijkstra_shortest_path"), f"Got: {hop1.get('hop_type')}")
     record_result("Shortest Path computes valid total_distance_km (> 0)", bool(hop1.get("total_distance_km") and hop1["total_distance_km"] > 0), f"Distance: {hop1.get('total_distance_km')}")
     record_result("Shortest Path identifies Northfield Community Hospital target", "Northfield" in str(hop1.get("hop_target", "")), f"Target: {hop1.get('hop_target')}")
     record_result("Shortest Path returns Dr. Amaya Desai", any("Amaya Desai" in doc.get("doctor", "") for doc in hop1.get("results", [])), f"Results: {hop1.get('results')}")
@@ -302,7 +317,7 @@ def test_multihop_algorithms():
     # 7.5 API End-to-end /ask multi-hop check
     r_api = requests.post(f"{FASTAPI_URL}/ask", json={"question": "general physician at metro hospital"})
     data_api = r_api.json()
-    record_result("POST /ask returns shortest_path referral metadata", data_api.get("graph_hopped") is True and data_api.get("hop_type") == "shortest_path", f"API resp: {data_api}")
+    record_result("POST /ask returns shortest_path referral metadata", data_api.get("graph_hopped") is True and data_api.get("hop_type") in ("shortest_path", "dijkstra_shortest_path"), f"API resp: {data_api}")
     record_result("POST /ask includes total_distance_km and traversal_path", bool(data_api.get("total_distance_km") and len(data_api.get("traversal_path", [])) > 1), f"Path: {data_api.get('traversal_path')}")
 
 

@@ -155,8 +155,54 @@ SPECIALTY_MAP = {
     "urolog": "Urology"
 }
 
+HOSPITAL_PATTERNS = [
+    # Full canonical names
+    (r'\bmetro central medical center\b', 'Metro Central Medical Center'),
+    (r'\bminesotta specialty hospital\b', 'Minesotta Specialty Hospital'),
+    (r'\briverdale general hospital\b', 'Riverdale General Hospital'),
+    (r'\bbayview healthcare center\b', 'Bayview Healthcare Center'),
+    (r'\bbridge candy medical center\b', 'Bridge Candy Medical Center'),
+    (r'\boakridge specialty hospital\b', 'Oakridge Specialty Hospital'),
+    (r'\bhighland community hospital\b', 'Highland Community Hospital'),
+    (r'\bpinecrest medical institute\b', 'Pinecrest Medical Institute'),
+    (r'\bclearwater general hospital\b', 'Clearwater General Hospital'),
+    (r'\bsilver spring healthcare center\b', 'Silver Spring Healthcare Center'),
+    (r'\bfairview medical center\b', 'Fairview Medical Center'),
+    (r'\bapex regional hospital\b', 'Apex Regional Hospital'),
+    (r'\bnorthfield community hospital\b', 'Northfield Community Hospital'),
+    (r'\briverdale specialty center\b', 'Riverdale Specialty Center'),
+    (r'\bbayview general hospital\b', 'Bayview General Hospital'),
+    (r'\boakridge general hospital\b', 'Oakridge General Hospital'),
+    (r'\bpinecrest community hospital\b', 'Pinecrest Community Hospital'),
+    (r'\bclearwater specialty center\b', 'Clearwater Specialty Center'),
+    (r'\bsilver spring general hospital\b', 'Silver Spring General Hospital'),
+    (r'\bapex advanced medical center\b', 'Apex Advanced Medical Center'),
+    # Recognizable keywords/prefixes
+    (r'\bapex advanced\b', 'Apex Advanced Medical Center'),
+    (r'\bapex regional\b', 'Apex Regional Hospital'),
+    (r'\bbridge candy\b', 'Bridge Candy Medical Center'),
+    (r'\bmetro central\b', 'Metro Central Medical Center'),
+    (r'\bminesotta\b', 'Minesotta Specialty Hospital'),
+    (r'\bnorthfield community\b', 'Northfield Community Hospital'),
+    (r'\bnorthfield\b', 'Northfield Community Hospital'),
+    (r'\bhighland community\b', 'Highland Community Hospital'),
+    (r'\bfairview\b', 'Fairview Medical Center'),
+    (r'\briverdale general\b', 'Riverdale General Hospital'),
+    (r'\briverdale specialty\b', 'Riverdale Specialty Center'),
+    (r'\bbayview general\b', 'Bayview General Hospital'),
+    (r'\bbayview healthcare\b', 'Bayview Healthcare Center'),
+    (r'\boakridge general\b', 'Oakridge General Hospital'),
+    (r'\boakridge specialty\b', 'Oakridge Specialty Hospital'),
+    (r'\bpinecrest medical\b', 'Pinecrest Medical Institute'),
+    (r'\bpinecrest community\b', 'Pinecrest Community Hospital'),
+    (r'\bclearwater general\b', 'Clearwater General Hospital'),
+    (r'\bclearwater specialty\b', 'Clearwater Specialty Center'),
+    (r'\bsilver spring general\b', 'Silver Spring General Hospital'),
+    (r'\bsilver spring healthcare\b', 'Silver Spring Healthcare Center'),
+]
 
-def extract_specialty(text):
+
+def extract_specialty(text: str):
     t = text.lower()
     for k, v in SPECIALTY_MAP.items():
         if k in t:
@@ -164,9 +210,41 @@ def extract_specialty(text):
     return None
 
 
+def extract_hospital(text: str):
+    t = text.lower()
+    for pattern, name in HOSPITAL_PATTERNS:
+        if re.search(pattern, t):
+            return name
+    for prep in [' at ', ' in ', ' for ']:
+        if prep in t:
+            after = t.split(prep)[-1].strip()
+            if any(w in after for w in ['hospital', 'medical center', 'healthcare', 'clinic', 'institute']):
+                clean = re.sub(r'^(the|a|an)\s+', '', after).strip()
+                clean = re.sub(r'[^\w\s]', '', clean).strip()
+                if clean:
+                    return clean.title()
+    return None
+
+
+def extract_district(text: str):
+    t = text.lower()
+    if re.search(r'\bnorth district\b', t) or re.search(r'\b(in|from|across|within|around)\s+(the\s+)?north\b', t) or re.search(r'\bnorth\s+(zone|region|area|side)\b', t):
+        return "North District"
+    if re.search(r'\bsouth district\b', t) or re.search(r'\b(in|from|across|within|around)\s+(the\s+)?south\b', t) or re.search(r'\bsouth\s+(zone|region|area|side)\b', t):
+        return "South District"
+    if re.search(r'\bdowntown\b', t) or re.search(r'\bmetro center\b', t):
+        return "Downtown"
+    if re.search(r'\bnorth\b', t) and not re.search(r'\bnorth(field| central)\b', t) and not any(w in t for w in ['hospital', 'center', 'institute']):
+        return "North District"
+    if re.search(r'\bsouth\b', t) and not re.search(r'\bsouth(field| central)\b', t) and not any(w in t for w in ['hospital', 'center', 'institute']):
+        return "South District"
+    return None
+
+
 def fast_rule_parser(q: str):
     q_low = q.lower().strip()
 
+    # 1. Check Doctor name
     doc_name = None
     m = re.search(r'\b(?:dr\.?|doctor)\s+([a-z]+(?:\s+[a-z]+)?)', q_low)
     if m:
@@ -174,19 +252,14 @@ def fast_rule_parser(q: str):
         non_names = {'located', 'in', 'at', 'working', 'who', 'specialist', 'specializing', 'for', 'near'}
         words = candidate.split()
         if words and words[0] not in non_names:
-            # Strip trailing short connector words like 'a', 'an', 'is', 'in'
             clean_cand = re.sub(r'(?i)\b(a|an|is|in|at|for|the|of)\b$', '', candidate).strip()
             doc_name = f"Dr. {clean_cand.title()}" if clean_cand else m.group(0).title()
 
     spec = extract_specialty(q_low)
+    hosp = extract_hospital(q_low)
+    dist = extract_district(q_low)
 
-    # Extract hospital if present
-    hosp_match = None
-    for h in ['apex advanced', 'apex regional', 'riverdale', 'metro central', 'north district', 'oakridge', 'bayview', 'highland', 'pinecrest', 'clearwater', 'silver spring', 'fairview', 'northfield', 'specialty hospital', 'general hospital', 'medical center']:
-        if h in q_low:
-            hosp_match = h.title()
-            break
-
+    # Specific doctor check
     if doc_name and spec:
         clean_doc = re.sub(r'(?i)\b(neurology|cardiology|dermatology|orthopedics|pediatrics|general medicine|doctor|dr\.?|department|at|in)\b', '', doc_name).strip()
         clean_doc = re.sub(r'(?i)\b(a|an|is|in|at|for|the|of)\b$', '', clean_doc).strip()
@@ -197,33 +270,46 @@ def fast_rule_parser(q: str):
             'doctor_name': final_name,
             'specialty': spec
         }
-        if hosp_match:
-            ret['hospital_name'] = hosp_match
+        if hosp:
+            ret['hospital_name'] = hosp
         return ret
 
-    if doc_name and ('who is' in q_low or 'tell me about' in q_low or 'details' in q_low or 'info' in q_low or hosp_match or len(q_low.split()) <= 6):
+    if doc_name and ('who is' in q_low or 'tell me about' in q_low or 'details' in q_low or 'info' in q_low or hosp or len(q_low.split()) <= 6):
         clean_doc = re.sub(r'(?i)\b(who is|tell me about|details|info|department|at|in)\b', '', doc_name).strip()
-        if hosp_match:
-            clean_doc = re.sub(r'(?i)\b' + re.escape(hosp_match.lower()) + r'\b', '', clean_doc).strip()
+        if hosp:
+            clean_doc = re.sub(r'(?i)\b' + re.escape(hosp.lower()) + r'\b', '', clean_doc).strip()
         clean_doc = re.sub(r'^[.\s]+', '', clean_doc).strip()
         final_name = f"Dr. {clean_doc.title()}" if (clean_doc and not clean_doc.lower().startswith("dr")) else (clean_doc or doc_name)
         ret = {
             'intent': 'doctor_by_name',
             'doctor_name': final_name
         }
-        if hosp_match:
-            ret['hospital_name'] = hosp_match
+        if hosp:
+            ret['hospital_name'] = hosp
         return ret
 
-    # 2. Specialty with location / district / hospital
+    # 2. Doctors by Hospital (Takes precedence over general district)
+    doctor_words = ['doctor', 'doctors', 'physician', 'physicians', 'practitioner', 'practitioners', 'specialist', 'specialists', 'staff', 'working', 'who works', 'show', 'list', 'view', 'find']
+    if hosp and any(w in q_low for w in doctor_words) and not spec:
+        return {
+            'intent': 'doctors_by_hospital',
+            'hospital_name': hosp
+        }
+
+    # 3. Specialty with Hospital / District / City
     if spec:
-        dist = None
-        if 'north' in q_low:
-            dist = 'North District'
-        elif 'south' in q_low:
-            dist = 'South District'
-        elif 'downtown' in q_low:
-            dist = 'Downtown'
+        if hosp:
+            return {
+                'intent': 'doctors_by_specialty_and_location',
+                'specialty': spec,
+                'location': hosp
+            }
+        if dist:
+            return {
+                'intent': 'doctors_by_specialty_and_district',
+                'specialty': spec,
+                'district': dist
+            }
 
         loc = None
         for l in ['oak ridge', 'oakridge', 'bayview', 'highland', 'fairview', 'silver spring', 'metro central', 'north central', 'west end', 'riverdale', 'eastside']:
@@ -231,7 +317,7 @@ def fast_rule_parser(q: str):
                 loc = l.title().replace('Oak Ridge', 'Oakridge')
                 break
 
-        if not loc and not dist:
+        if not loc:
             for prep in [' at ', ' in ', ' near ']:
                 if prep in q_low:
                     raw_loc = q_low.split(prep)[-1].strip()
@@ -240,12 +326,6 @@ def fast_rule_parser(q: str):
                         loc = raw_loc.title()
                         break
 
-        if dist:
-            return {
-                'intent': 'doctors_by_specialty_and_district',
-                'specialty': spec,
-                'district': dist
-            }
         if loc:
             return {
                 'intent': 'doctors_by_specialty_and_location',
@@ -257,26 +337,19 @@ def fast_rule_parser(q: str):
             'specialty': spec
         }
 
-    # 3. Doctors by District / Location without explicit single specialty
+    # 4. Doctors by District / Hospital
     if any(w in q_low for w in ['doctor', 'doctors', 'physician', 'physicians', 'practitioner', 'practitioners', 'specialist', 'specialists']):
-        if 'north' in q_low:
-            return {'intent': 'doctors_by_district', 'district': 'North District'}
-        if 'south' in q_low:
-            return {'intent': 'doctors_by_district', 'district': 'South District'}
-        if 'downtown' in q_low:
-            return {'intent': 'doctors_by_district', 'district': 'Downtown'}
+        if hosp:
+            return {'intent': 'doctors_by_hospital', 'hospital_name': hosp}
+        if dist:
+            return {'intent': 'doctors_by_district', 'district': dist}
 
-    # 4. Hospitals & non-specialty queries
+    # 5. Hospitals & non-specialty queries
     if 'hospital' in q_low or 'medical center' in q_low or 'facilities' in q_low:
-        if ('doctor' in q_low or 'practitioner' in q_low or 'physician' in q_low or 'working' in q_low) and ' at ' in q_low:
-            h_name = q_low.split(' at ')[-1].strip().title()
-            return {'intent': 'doctors_by_hospital', 'hospital_name': h_name}
-        if 'north' in q_low:
-            return {'intent': 'hospitals_by_district', 'district': 'North District'}
-        if 'south' in q_low:
-            return {'intent': 'hospitals_by_district', 'district': 'South District'}
-        if 'downtown' in q_low:
-            return {'intent': 'hospitals_by_district', 'district': 'Downtown'}
+        if ('doctor' in q_low or 'practitioner' in q_low or 'physician' in q_low or 'working' in q_low or 'who works' in q_low) and hosp:
+            return {'intent': 'doctors_by_hospital', 'hospital_name': hosp}
+        if dist:
+            return {'intent': 'hospitals_by_district', 'district': dist}
         if 'all' in q_low or 'list' in q_low or 'show' in q_low:
             return {'intent': 'all_hospitals'}
 
@@ -311,22 +384,22 @@ def fuzzy_graph_fallback(question: str):
             "doctor_name": doc_name
         }
 
-    # 3. Check locations / districts
-    dist = None
-    if "north" in q_low:
-        dist = "North District"
-    elif "south" in q_low:
-        dist = "South District"
-    elif "downtown" in q_low:
-        dist = "Downtown"
+    # 3. Check hospital
+    hosp = extract_hospital(q_low)
+    dist = extract_district(q_low)
 
+    # If doctors at hospital
+    if hosp and any(w in q_low for w in ['doctor', 'doctors', 'physician', 'physicians', 'practitioner', 'practitioners', 'specialist', 'specialists', 'staff', 'working', 'who works', 'show', 'list', 'view', 'find']) and not spec:
+        return {"intent": "doctors_by_hospital", "hospital_name": hosp}
+
+    # 4. Check locations / districts with specialty
     loc = None
     for l in ["oak ridge", "oakridge", "bayview", "highland", "fairview", "silver spring", "metro central", "north central", "west end", "riverdale", "eastside"]:
         if l in q_low:
             loc = l.title().replace("Oak Ridge", "Oakridge")
             break
 
-    if not loc and not dist:
+    if not loc and not dist and not hosp:
         for prep in [' at ', ' in ', ' near ']:
             if prep in q_low:
                 raw_loc = q_low.split(prep)[-1].strip()
@@ -335,6 +408,8 @@ def fuzzy_graph_fallback(question: str):
                     loc = raw_loc.title()
                     break
 
+    if spec and hosp:
+        return {"intent": "doctors_by_specialty_and_location", "specialty": spec, "location": hosp}
     if spec and dist:
         return {"intent": "doctors_by_specialty_and_district", "specialty": spec, "district": dist}
     if spec and loc:
@@ -342,12 +417,14 @@ def fuzzy_graph_fallback(question: str):
     if spec:
         return {"intent": "doctors_by_specialty", "specialty": spec}
 
-    # 4. Check general doctors by district
+    # 5. Check general doctors by district/hospital
     if any(w in q_low for w in ['doctor', 'doctors', 'physician', 'physicians', 'practitioner', 'practitioners', 'specialist', 'specialists']):
+        if hosp:
+            return {"intent": "doctors_by_hospital", "hospital_name": hosp}
         if dist:
             return {"intent": "doctors_by_district", "district": dist}
 
-    # 5. Check hospitals
+    # 6. Check hospitals
     if "hospital" in q_low or "medical center" in q_low:
         if dist:
             return {"intent": "hospitals_by_district", "district": dist}
