@@ -386,10 +386,10 @@ def resolve_hospital_name(input_name: str) -> str | None:
 
     canonical_hospitals = [
         "Metro Central Medical Center",
-        "North District Specialty Hospital",
+        "Minesotta Specialty Hospital",
         "Riverdale General Hospital",
         "Bayview Healthcare Center",
-        "South District Medical Center",
+        "Bridge Candy Medical Center",
         "Oakridge Specialty Hospital",
         "Highland Community Hospital",
         "Pinecrest Medical Institute",
